@@ -1,0 +1,49 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+header, footer {
+  padding: 12px;
+  background: #020617;
+  text-align: center;
+}
+
+main {
+  padding: 10px;
+}
+
+#path {
+  font-size: 0.9em;
+  margin-bottom: 8px;
+  color: #94a3b8;
+}
+
+#file-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#file-list li {
+  padding: 10px;
+  border-bottom: 1px solid #1e293b;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#file-list li:hover {
+  background: #1e293b;
+}
+
+button {
+  padding: 10px;
+  font-size: 1em;
+  border-radius: 6px;
+  border: none;
+  background: #2563eb;
+  color: white;
+}
