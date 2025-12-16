@@ -3,6 +3,8 @@ from typing import List
 import shutil
 import mimetypes
 from aiohttp import web
+import zipfile
+import io
 
 DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
 
@@ -13,6 +15,10 @@ DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
 
 class FileSystemError(Exception):
     pass
+
+class FileAlreadyExistsError(Exception):
+    pass
+
 
 
 # =========================
@@ -33,6 +39,14 @@ class FileSystemObject:
     # ---- Directory / file info ----
     def getDirectoryPath(self) -> str:
         return str(self.path if self.isDir() else self.path.parent)
+    
+    def getItemsCount(self) -> int:
+        if not self.isDir():
+            raise NotADirectoryError("This object is not a directory")
+        try:
+            return sum(1 for _ in self.path.iterdir())
+        except PermissionError:
+            return 0
 
     def getFileName(self) -> str:
         if not self.isFile():
@@ -66,6 +80,11 @@ class FileSystemObject:
             "isFile": self.isFile(),
             "directory": self.getDirectoryPath(),
         }
+
+        if self.isDir():
+            data.update({
+                "itemsCount": self.getItemsCount()
+            })
 
         if self.isFile():
             data.update({
@@ -103,13 +122,15 @@ class FileSystemService:
 
         if not self.base_dir.exists():
             raise FileSystemError("Base directory does not exist")
-
-    # ---- Path safety ----
+        
     def _resolve(self, user_path: str) -> Path:
-        p = (self.base_dir / user_path.lstrip("/")).resolve()
+        if not user_path:
+            raise FileSystemError("Path is required")
+
+        p = Path(user_path).expanduser().resolve()
 
         if not p.is_relative_to(self.base_dir):
-            raise FileSystemError("Access outside base directory is forbidden")
+            raise FileSystemError("Access outside /home/deck is forbidden")
 
         return p
 
@@ -195,6 +216,8 @@ class FileSystemService:
         Returns a writable file object.
         """
         file_path = self._resolve(path)
+        if Path(file_path).is_file():
+            raise FileAlreadyExistsError("File already exists")
         file_path.parent.mkdir(parents=True, exist_ok=True)
         return FileWriteStream(open(file_path, "wb"))
 
@@ -206,6 +229,28 @@ class FileSystemService:
         with open(src_path, "rb") as r, open(dst_path, "wb") as w:
             while chunk := r.read(chunk_size):
                 w.write(chunk)
+
+    def stream_zip(self, paths: list[str]):
+        """
+        Streams a zip containing the given files/directories.
+        """
+        buffer = io.BytesIO()
+
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for p in paths:
+                resolved = self._resolve(p)
+
+                if resolved.is_file():
+                    zipf.write(resolved, resolved.name)
+
+                elif resolved.is_dir():
+                    for file in resolved.rglob("*"):
+                        if file.is_file():
+                            arcname = file.relative_to(resolved.parent)
+                            zipf.write(file, arcname)
+
+        buffer.seek(0)
+        return buffer
 
 
 # =========================

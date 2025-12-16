@@ -13,7 +13,12 @@ SETTINGS_DIR = decky.DECKY_PLUGIN_SETTINGS_DIR
 SCRIPT_DIR = decky.DECKY_PLUGIN_DIR
 LOG_DIR = decky.DECKY_PLUGIN_LOG_DIR
 
-fs = FileSystemService("/home/deck")
+# Load user's settings
+settings = SettingsManager(name="settings", settings_directory=SETTINGS_DIR)
+settings.read()
+
+fs = FileSystemService(Path("/home/deck"))
+
 
 class Plugin:
     async def _main(self):

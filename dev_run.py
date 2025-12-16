@@ -9,7 +9,7 @@ DIR_PATH = "/home/deck/Documents/Programacao/Steam Deck/decky-file-explorer/"
 async def main():
     # --- Filesystem test ---
     fs = FileSystemService(Path("/home/deck"))
-    items = fs.list_dir("Documents")
+    items = fs.list_dir("/home/deck/Documents")
 
     for obj in items:
         print(obj.to_dict())

@@ -1,27 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Steam Deck File Explorer</title>
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Steam Deck File Explorer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<header>
-  <h1>Steam Deck File Explorer</h1>
-</header>
+    <!-- Icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="common.css" />
+    <script src="scripts/app.js?v=1.0.1.7"></script>
+    <script src="scripts/upload.js?v=1.0.0.4"></script>
+  </head>
+  <body>
+    <div id="error-bar" class="error-bar hidden"></div>
+    <header>
+      <i class="fas fa-bars hamburger"></i>
+      <div class="breadcrumb" id="breadcrumb">/</div>
+      <h1>Steam Deck File Explorer</h1>
+    </header>
 
-<main>
-  <div id="path"></div>
+    <!-- LOGIN -->
+    <div id="loginView">
+      <div class="login-box">
+        <h2>Login</h2>
+        <input type="text" id="login" placeholder="Login" />
+        <input type="password" id="password" placeholder="Password" />
+        <button onclick="doLogin()">Login</button>
+      </div>
+    </div>
 
-  <ul id="file-list"></ul>
-</main>
+    <!-- FILE MANAGER -->
+    <div id="fileView">
+      <div class="toolbar" id="toolbar"></div>
+      <div class="file-list" id="fileList"></div>
+    </div>
 
-<footer>
-  <button onclick="goUp()">⬆ Up</button>
-</footer>
+    <!-- PROPERTIES MODAL -->
+    <div id="propertiesModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Directory Properties</h3>
+          <button class="close-btn" onclick="closePropertiesModal()">×</button>
+        </div>
 
-<script src="app.js"></script>
-</body>
+        <div class="modal-body" id="propertiesBody"></div>
+      </div>
+    </div>
+
+    <!-- UPLOAD MODAL -->
+    <div id="uploadModal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Uploading…</h3>
+        <div class="progress-container">
+          <div id="uploadProgress" class="progress-bar"></div>
+        </div>
+        <div id="uploadStatus" class="upload-status">0%</div>
+      </div>
+    </div>
+
+  </body>
 </html>

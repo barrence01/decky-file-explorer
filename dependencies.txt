@@ -1,3 +1,4 @@
 pip install pytest
 pip install aiohttp
 pip install pytest pytest-aiohttp aiohttp
+pip install pytest-cov
