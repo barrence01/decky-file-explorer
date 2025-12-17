@@ -7,12 +7,20 @@ body {
 
 /* ---------- Header ---------- */
 header {
-  height: 48px;
+  height: 10%;
+  max-height: 30%;
   background: #1f2937;
   color: #fff;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   padding: 0 12px;
+}
+
+@media (max-width: 600px) {
+  .header-title {
+    display: none;
+  }
 }
 
 .hamburger {
@@ -77,6 +85,7 @@ header {
   background: #fff;
   padding: 8px;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   border-bottom: 1px solid #ddd;
 }
@@ -269,7 +278,7 @@ header {
   color: #fff;
   padding: 16px;
   border-radius: 8px;
-  width: 40%;
+  width: 50%;
 }
 
 .modal-content-media.preview {

@@ -145,7 +145,7 @@ class WebServer:
             AUTH_COOKIE,
             token,
             httponly=True,
-            secure=True,      # ⚠ requires HTTPS
+            secure=False,      
             samesite="Strict"
         )
         return response
