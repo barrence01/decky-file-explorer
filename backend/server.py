@@ -95,8 +95,8 @@ class WebServer:
         self.app.router.add_post("/api/dir/download", self.download)
         self.app.router.add_post("/api/dir/delete", self.delete)
         self.app.router.add_post("/api/file/rename", self.rename)
-        
-
+        self.app.router.add_post("/api/dir/paste", self.paste)
+        self.app.router.add_post("/api/dir/create", self.create_dir)
 
 
     def _setup_static(self):
@@ -234,6 +234,58 @@ class WebServer:
             return web.json_response({"status": "ok"})
         except FileSystemError as e:
             return web.json_response({"error": str(e)}, status=400)
+        
+    async def paste(self, request: web.Request):
+        data = await request.json()
+
+        mode = data.get("mode")
+        target_dir = data.get("targetDir")
+        paths = data.get("paths", [])
+        overwrite = data.get("overwrite", False)
+
+        if mode not in ("copy", "move"):
+            raise web.HTTPBadRequest(reason="Invalid mode")
+
+        conflicts = []
+
+        for src in paths:
+            name = Path(src).name
+            dst = f"{target_dir.rstrip('/')}/{name}"
+
+            try:
+                if mode == "copy":
+                    self.fs.copy(src, dst, overwrite=overwrite)
+                else:
+                    self.fs.move(src, dst, overwrite=overwrite)
+
+            except FileAlreadyExistsError:
+                conflicts.append(name)
+
+        if conflicts and not overwrite:
+            return web.json_response(
+                {
+                    "error": "conflict",
+                    "files": conflicts
+                },
+                status=409
+            )
+
+        return web.json_response({"status": "ok"})
+    
+    async def create_dir(self, request: web.Request):
+        data = await request.json()
+        path = data.get("path")
+
+        if not path:
+            raise web.HTTPBadRequest(reason="Missing path")
+
+        try:
+            self.fs.create_dir(path)
+            return web.json_response({"status": "ok"})
+        except FileSystemError as e:
+            return web.json_response({"error": str(e)}, status=400)
+        except FileExistsError:
+            return web.json_response({"error": "Folder already exists"}, status=409)
 
     async def upload(self, request: web.Request):
         reader = await request.multipart()

@@ -167,16 +167,34 @@ class FileSystemService:
 
         file_path.unlink()
 
-    def move(self, src: str, dst: str):
-        shutil.move(self._resolve(src), self._resolve(dst))
-
-    def copy(self, src: str, dst: str):
+    def move(self, src: str, dst: str, overwrite: bool = False):
         src_path = self._resolve(src)
         dst_path = self._resolve(dst)
 
+        if dst_path.exists() and not overwrite:
+            raise FileAlreadyExistsError(f"{dst_path.name} already exists")
+
+        if dst_path.exists() and overwrite:
+            if dst_path.is_dir():
+                shutil.rmtree(dst_path)
+            else:
+                dst_path.unlink()
+
+        shutil.move(src_path, dst_path)
+
+    def copy(self, src: str, dst: str, overwrite: bool = False):
+        src_path = self._resolve(src)
+        dst_path = self._resolve(dst)
+    
+        if dst_path.exists() and not overwrite:
+            raise FileAlreadyExistsError(f"{dst_path.name} already exists")
+
         if src_path.is_dir():
+            if dst_path.exists() and overwrite:
+                shutil.rmtree(dst_path)
             shutil.copytree(src_path, dst_path)
         else:
+            dst_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src_path, dst_path)
 
     def rename(self, path: str, new_name: str):

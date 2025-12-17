@@ -1,3 +1,4 @@
+/* ---------- Default Style ---------- */
 body {
   margin: 0;
   font-family: Arial, Helvetica, sans-serif;
@@ -28,6 +29,15 @@ header {
 }
 
 /* ---------- Login ---------- */
+.login-box input,
+.login-box button {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  font-size: 16px;
+}
+
 #loginView {
   height: calc(100vh - 48px);
   display: flex;
@@ -202,4 +212,53 @@ header {
 
 .hidden {
   display: none;
+}
+
+/* ---------- Side Panel ---------- */
+.side-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 200px;
+  height: 100%;
+  background: #1f2937;
+  color: #fff;
+  padding: 16px;
+  box-shadow: 2px 0 6px rgba(0,0,0,0.3);
+  transform: translateX(-100%); 
+  transition: transform 0.3s ease;
+  z-index: 1500;
+}
+
+.side-panel.visible {
+  transform: translateX(0); 
+}
+
+
+.side-panel button {
+  background: #2563eb;
+  border: none;
+  color: #fff;
+  padding: 8px 12px;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.side-panel ul {
+  list-style: none;
+  padding: 0;
+}
+
+.side-panel li {
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+/* ---------- Side Panel - Move content ---------- */
+#mainContent {
+  transition: transform 0.3s ease;
+}
+
+#mainContent.shifted {
+  transform: translateX(230px);
 }

@@ -10,56 +10,70 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
     />
-    <link rel="stylesheet" href="common.css" />
-    <script src="scripts/app.js?v=1.0.1.7"></script>
+    <link rel="stylesheet" href="common.css?v=1.0.1.8" />
+    <script src="scripts/app.js?v=1.0.3.8"></script>
     <script src="scripts/upload.js?v=1.0.0.4"></script>
   </head>
+  <!-- SIDE PANEL -->
+  <div id="sidePanel" class="side-panel">
+    <button id="logoffBtn" onclick="doLogoff()"><i class="fas fa-sign-out-alt"></i> Logoff</button>
+    <!--
+    <ul>
+      <li>Option 1</li>
+      <li>Option 2</li>
+      <li>Option 3</li>
+    </ul>
+    -->
+  </div>
   <body>
-    <div id="error-bar" class="error-bar hidden"></div>
-    <header>
-      <i class="fas fa-bars hamburger"></i>
-      <div class="breadcrumb" id="breadcrumb">/</div>
-      <h1>Steam Deck File Explorer</h1>
-    </header>
+    <div id="mainContent">
+      <div id="error-bar" class="error-bar hidden"></div>
+      <header>
+        <i class="fas fa-bars hamburger"></i>
+        <div class="breadcrumb" id="breadcrumb">/</div>
+        <h1>Steam Deck File Explorer</h1>
+      </header>
 
-    <!-- LOGIN -->
-    <div id="loginView">
-      <div class="login-box">
-        <h2>Login</h2>
-        <input type="text" id="login" placeholder="Login" />
-        <input type="password" id="password" placeholder="Password" />
-        <button onclick="doLogin()">Login</button>
-      </div>
-    </div>
-
-    <!-- FILE MANAGER -->
-    <div id="fileView">
-      <div class="toolbar" id="toolbar"></div>
-      <div class="file-list" id="fileList"></div>
-    </div>
-
-    <!-- PROPERTIES MODAL -->
-    <div id="propertiesModal" class="modal hidden">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Directory Properties</h3>
-          <button class="close-btn" onclick="closePropertiesModal()">×</button>
+      <!-- LOGIN -->
+      <div id="loginView">
+        <div class="login-box">
+          <h2>Login</h2>
+          <input type="text" id="login" placeholder="Login" />
+          <input type="password" id="password" placeholder="Password" />
+          <button onclick="doLogin()">Login</button>
         </div>
-
-        <div class="modal-body" id="propertiesBody"></div>
       </div>
-    </div>
 
-    <!-- UPLOAD MODAL -->
-    <div id="uploadModal" class="modal hidden">
-      <div class="modal-content">
-        <h3>Uploading…</h3>
-        <div class="progress-container">
-          <div id="uploadProgress" class="progress-bar"></div>
+      <!-- FILE MANAGER -->
+      <div id="fileView">
+        <div class="toolbar" id="toolbar"></div>
+        <div class="file-list" id="fileList"></div>
+      </div>
+
+      <!-- PROPERTIES MODAL -->
+      <div id="propertiesModal" class="modal hidden">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Directory Properties</h3>
+            <button class="close-btn" onclick="closePropertiesModal()">
+              ×
+            </button>
+          </div>
+
+          <div class="modal-body" id="propertiesBody"></div>
         </div>
-        <div id="uploadStatus" class="upload-status">0%</div>
+      </div>
+
+      <!-- UPLOAD MODAL -->
+      <div id="uploadModal" class="modal hidden">
+        <div class="modal-content">
+          <h3>Uploading…</h3>
+          <div class="progress-container">
+            <div id="uploadProgress" class="progress-bar"></div>
+          </div>
+          <div id="uploadStatus" class="upload-status">0%</div>
+        </div>
       </div>
     </div>
-
   </body>
 </html>
