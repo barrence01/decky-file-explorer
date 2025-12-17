@@ -2,6 +2,22 @@ let currentPath = null;
 let selectedItems = [];
 let selectedDir = null;
 let errorTimeout = null;
+let clipboardItems = [];
+let clipboardMode = null; // "copy" | "move"
+
+
+document.addEventListener("DOMContentLoaded", () => {
+  const hamburger = document.querySelector(".hamburger");
+  const sidePanel = document.getElementById("sidePanel");
+  const mainContent = document.getElementById("mainContent");
+
+  hamburger.addEventListener("click", () => {
+    sidePanel.classList.toggle("visible");
+    mainContent.classList.toggle("shifted");
+  });
+  passwordEnterEvent();
+});
+
 
 /* ---------- AUTH ---------- */
 async function checkLogin() {
@@ -18,13 +34,49 @@ async function doLogin() {
   const login = document.getElementById("login").value;
   const password = document.getElementById("password").value;
 
-  await fetch("api/login", {
+  const res = await fetch("api/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ login, password }),
   });
 
+  if(!res.ok) {
+    showError("Check your credentials and try again.");
+  }
   checkLogin();
+}
+
+async function doLogoff() {
+  const res = await fetch("/api/logoff", { method: "GET" });
+
+  if (!res.ok) {
+    showError("Failed to log off");
+    return;
+  }
+
+  // Clear UI state
+  selectedItems = [];
+  clipboardItems = [];
+  clipboardMode = null;
+  currentPath = null;
+
+  // Hide file view, show login
+  document.getElementById("fileView").style.display = "none";
+  document.getElementById("loginView").style.display = "flex";
+
+  // Hide hamburger menu
+  const hamburger = document.querySelector(".hamburger");
+  hamburger.click();
+}
+
+async function passwordEnterEvent() {
+  const passwordInput = document.getElementById('password');
+
+  passwordInput.addEventListener('keydown', function(event) {
+    if (event.key === 'Enter') {
+      doLogin();
+    }
+  });
 }
 
 /* ---------- FILE VIEW ---------- */
@@ -39,7 +91,6 @@ function getParentPath(path) {
   parts.pop();
   return parts.join("/") || "/";
 }
-
 
 function showFileView() {
   document.getElementById("loginView").style.display = "none";
@@ -58,7 +109,7 @@ async function loadDir(path = null) {
 
   const data = await res.json();
 
-  selectedDir = data.selectedDir; 
+  selectedDir = data.selectedDir;
   currentPath = data.selectedDir.path;
 
   document.getElementById("breadcrumb").innerText = currentPath;
@@ -84,7 +135,7 @@ function renderFiles(files) {
 
     const name = document.createElement("div");
     name.className = "file-name";
-    name.innerText = f.isDir
+        name.innerText = f.isDir
       ? f.path.split("/").pop()
       : f.name;
 
@@ -148,24 +199,40 @@ function updateToolbar() {
     )
   );
 
+  // ---- COPY / MOVE ----
+  if (clipboardItems.length > 0) {
+    bar.appendChild(
+      toolbarButton(
+        `${clipboardItems.length} item(s)`,
+        "fas fa-clipboard",
+        null,
+        true
+      )
+    );
+
+    bar.appendChild(toolbarButton("Paste", "fas fa-paste", () => pasteClipboard(false)));
+
+    bar.appendChild(toolbarButton("Cancel", "fas fa-times", clearClipboard));
+
+    return;
+  }
+
   // ---- Primary actions ----
   if (selectionCount === 0) {
-    bar.appendChild(
-      toolbarButton("Upload", "fas fa-upload", uploadFiles)
-    );
+    bar.appendChild(toolbarButton("Upload", "fas fa-upload", uploadFiles));
   } else {
-    bar.appendChild(toolbarButton("Move", "fas fa-arrows-alt"));
-    bar.appendChild(toolbarButton("Copy", "fas fa-copy"));
+      bar.appendChild(
+        toolbarButton("Move", "fas fa-arrows-alt", startMove)
+      );
+      bar.appendChild(
+        toolbarButton("Copy", "fas fa-copy", startCopy)
+      );
   }
 
   // ---- Context actions ----
   if (selectionCount <= 1) {
     bar.appendChild(
-      toolbarButton(
-        "Properties",
-        "fas fa-circle-info",
-        showPropertiesModal
-      )
+      toolbarButton("Properties", "fas fa-circle-info", showPropertiesModal)
     );
   }
 
@@ -196,6 +263,11 @@ function updateToolbar() {
       )
     );
   }
+
+  bar.appendChild(
+    toolbarButton("New Folder", "fas fa-folder-plus", createNewFolder)
+  );
+
 }
 
 function toolbarButton(label, iconClass, onClick, disabled = false) {
@@ -204,6 +276,7 @@ function toolbarButton(label, iconClass, onClick, disabled = false) {
   if (iconClass) {
     const icon = document.createElement("i");
     icon.className = iconClass;
+    icon.style.paddingRight = "2px";
     btn.appendChild(icon);
   }
 
@@ -222,7 +295,7 @@ async function deleteSelected() {
 
   if (!confirm(`Delete ${selectedItems.length} item(s)?`)) return;
 
-  const paths = selectedItems.map(i => i.path);
+  const paths = selectedItems.map((i) => i.path);
 
   const res = await fetch("/api/dir/delete", {
     method: "POST",
@@ -302,9 +375,7 @@ function showPropertiesModal() {
 
   body.innerHTML = html;
 
-  document
-    .getElementById("propertiesModal")
-    .classList.remove("hidden");
+  document.getElementById("propertiesModal").classList.remove("hidden");
 }
 
 function formatSize(bytes) {
@@ -321,12 +392,92 @@ function formatSize(bytes) {
   return bytes.toFixed(2) + " " + units[i];
 }
 
-
 function closePropertiesModal() {
-  document
-    .getElementById("propertiesModal")
-    .classList.add("hidden");
+  document.getElementById("propertiesModal").classList.add("hidden");
 }
+
+/* ---------- COPY / MOVE ACTIONS ---------- */
+function startCopy() {
+  clipboardItems = [...selectedItems];
+  clipboardMode = "copy";
+  selectedItems = [];
+  updateToolbar();
+}
+
+function startMove() {
+  clipboardItems = [...selectedItems];
+  clipboardMode = "move";
+  selectedItems = [];
+  updateToolbar();
+}
+
+function clearClipboard() {
+  clipboardItems = [];
+  clipboardMode = null;
+  updateToolbar();
+}
+
+async function pasteClipboard(overwrite = false) {
+  if (!clipboardItems.length) return;
+
+  const res = await fetch("/api/dir/paste", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mode: clipboardMode,
+      targetDir: currentPath,
+      paths: clipboardItems.map(i => i.path),
+      overwrite:overwrite
+    })
+  });
+
+  const data = await res.json();
+
+  if (res.status === 409 && data.files) {
+    const list = data.files.join("\n");
+    const confirmOverwrite = confirm(
+      `The following files already exist:\n\n${list}\n\nOverwrite them?`
+    );
+
+    if (confirmOverwrite) {
+      return pasteClipboard(true);
+    }
+    return;
+  }
+
+  if (!res.ok) {
+    showError(data.error || "Paste failed");
+    return;
+  }
+
+  clearClipboard();
+  loadDir(currentPath);
+}
+
+/* ---------- NEW FOLDER ---------- */
+async function createNewFolder() {
+  const folderName = prompt("Enter folder name:");
+  if (!folderName) return;
+
+  const targetPath = currentPath + "/" + folderName;
+
+  const res = await fetch("/api/dir/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: targetPath })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    showError(data.error || "Failed to create folder");
+    return;
+  }
+
+  loadDir(currentPath);
+}
+
+
 
 /* ---------- INIT ---------- */
 checkLogin();
