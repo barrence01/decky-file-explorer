@@ -262,3 +262,33 @@ header {
 #mainContent.shifted {
   transform: translateX(230px);
 }
+
+/* ---------- Web View ---------- */
+.modal-content-media {
+  background: #1e1e1e;
+  color: #fff;
+  padding: 16px;
+  border-radius: 8px;
+  width: 40%;
+}
+
+.modal-content-media.preview {
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.modal-content-media.preview img,
+.modal-content-media.preview video {
+  max-width: 100%;
+  max-height: 80vh;
+}
+
+/* ---------- File HIghlight ---------- */
+.file-item.highlight-folder {
+  background: rgba(59, 130, 246, 0.15);
+  border-left: 4px solid #3b82f6;
+}
+
+.file-item.highlight-folder .fa-folder {
+  color: #3b82f6;
+}

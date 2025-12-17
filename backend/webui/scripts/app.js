@@ -5,6 +5,19 @@ let errorTimeout = null;
 let clipboardItems = [];
 let clipboardMode = null; // "copy" | "move"
 
+const HIGHLIGHT_FOLDERS = [
+  "Downloads",
+  "Pictures",
+  "Videos",
+  "Music",
+  "Desktop",
+  "Documents",
+  "Homebrew",
+  "Emudeck",
+  "Plugins"
+].map(n => n.toLowerCase());
+
+
 
 document.addEventListener("DOMContentLoaded", () => {
   const hamburger = document.querySelector(".hamburger");
@@ -124,7 +137,13 @@ function renderFiles(files) {
 
   files.forEach((f) => {
     const div = document.createElement("div");
+    
     div.className = "file-item";
+
+    if (shouldHighlightFolder(f)) {
+      div.classList.add("highlight-folder");
+      div.title = "Important folder";
+    }
 
     const icon = document.createElement("i");
 
@@ -147,9 +166,28 @@ function renderFiles(files) {
       if (f.isDir) loadDir(f.path);
     };
 
+    div.ondblclick = () => {
+      if (f.isDir) {
+        loadDir(f.path);
+      } else if (f.type === "image" || f.type === "video") {
+        openPreview(f);
+      }
+    };
+
     list.appendChild(div);
   });
 }
+
+function shouldHighlightFolder(file) {
+  if (!file.isDir) return false;
+
+  const name = file.path.split("/").pop().toLowerCase();
+  return HIGHLIGHT_FOLDERS.includes(name);
+  //return HIGHLIGHT_FOLDERS.some(n => name.includes(n));
+  //const HIGHLIGHT_PATTERNS = [/^steam/i, /^game/i];
+  //return HIGHLIGHT_PATTERNS.some(rx => rx.test(name));
+}
+
 
 function showError(message) {
   const bar = document.getElementById("error-bar");
@@ -230,12 +268,6 @@ function updateToolbar() {
   }
 
   // ---- Context actions ----
-  if (selectionCount <= 1) {
-    bar.appendChild(
-      toolbarButton("Properties", "fas fa-circle-info", showPropertiesModal)
-    );
-  }
-
   if (selectionCount > 0) {
     bar.appendChild(
       toolbarButton(
@@ -261,6 +293,12 @@ function updateToolbar() {
         "fas fa-i-cursor",
         renameSelected
       )
+    );
+  }
+
+  if (selectionCount <= 1) {
+    bar.appendChild(
+      toolbarButton("Properties", "fas fa-circle-info", showPropertiesModal)
     );
   }
 
@@ -477,6 +515,34 @@ async function createNewFolder() {
   loadDir(currentPath);
 }
 
+/* ---------- PREVIEW ---------- */
+function openPreview(file) {
+  const body = document.getElementById("previewBody");
+  body.innerHTML = "";
+
+  const url = `/api/file/view?path=${encodeURIComponent(file.path)}`;
+
+  if (file.type === "image") {
+    const img = document.createElement("img");
+    img.src = url;
+    body.appendChild(img);
+  }
+
+  if (file.type === "video") {
+    const video = document.createElement("video");
+    video.src = url;
+    video.controls = true;
+    video.autoplay = true;
+    body.appendChild(video);
+  }
+
+  document.getElementById("previewModal").classList.remove("hidden");
+}
+
+function closePreview() {
+  document.getElementById("previewModal").classList.add("hidden");
+  document.getElementById("previewBody").innerHTML = "";
+}
 
 
 /* ---------- INIT ---------- */
