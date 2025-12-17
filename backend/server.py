@@ -4,6 +4,7 @@ import asyncio
 import secrets
 import hashlib
 import hmac
+import mimetypes
 
 from backend.filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
 
@@ -97,6 +98,7 @@ class WebServer:
         self.app.router.add_post("/api/file/rename", self.rename)
         self.app.router.add_post("/api/dir/paste", self.paste)
         self.app.router.add_post("/api/dir/create", self.create_dir)
+        self.app.router.add_get("/api/file/view", self.view_file)
 
 
     def _setup_static(self):
@@ -355,6 +357,75 @@ class WebServer:
             }
         )
 
+        return response
+
+    async def view_file(self, request: web.Request):
+        path = request.query.get("path")
+        if not path:
+            raise web.HTTPBadRequest(reason="Missing path")
+
+        obj = self.fs.get_object(path)
+        if not obj.isFile():
+            raise web.HTTPBadRequest(reason="Not a file")
+
+        file_path = Path(path)
+        file_size = file_path.stat().st_size
+
+        mime, _ = mimetypes.guess_type(path)
+        mime = mime or "application/octet-stream"
+
+        range_header = request.headers.get("Range")
+
+        if range_header:
+            start, end = range_header.replace("bytes=", "").split("-")
+            start = int(start)
+            end = int(end) if end else file_size - 1
+
+            if start >= file_size:
+                raise web.HTTPRequestRangeNotSatisfiable()
+
+            chunk_size = end - start + 1
+
+            headers = {
+                "Content-Type": mime,
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(chunk_size),
+            }
+
+            response = web.StreamResponse(status=206, headers=headers)
+            await response.prepare(request)
+
+            with open(file_path, "rb") as f:
+                f.seek(start)
+                remaining = chunk_size
+
+                while remaining > 0:
+                    data = f.read(min(64 * 1024, remaining))
+                    if not data:
+                        break
+                    await response.write(data)
+                    remaining -= len(data)
+
+            await response.write_eof()
+            return response
+
+        # ---- Fallback: no Range header ----
+        headers = {
+            "Content-Type": mime,
+            "Content-Length": str(file_size),
+            "Accept-Ranges": "bytes",
+            "Content-Disposition": "inline",
+        }
+
+        response = web.StreamResponse(headers=headers)
+        await response.prepare(request)
+
+        with open(file_path, "rb") as f:
+            while chunk := f.read(64 * 1024):
+                await response.write(chunk)
+
+        await response.write_eof()
         return response
 
 
