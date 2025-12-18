@@ -4,6 +4,7 @@ let selectedDir = null;
 let errorTimeout = null;
 let clipboardItems = [];
 let clipboardMode = null; // "copy" | "move"
+let showHidden = false;
 
 const HIGHLIGHT_FOLDERS = [
   "Downloads",
@@ -14,7 +15,12 @@ const HIGHLIGHT_FOLDERS = [
   "Documents",
   "Homebrew",
   "Emudeck",
-  "Plugins"
+  "Plugins",
+  "Emulation",
+  "Applications",
+  "Logs",
+  "Data",
+  "Settings"
 ].map(n => n.toLowerCase());
 
 
@@ -135,7 +141,7 @@ function renderFiles(files) {
   const list = document.getElementById("fileList");
   list.innerHTML = "";
 
-  files.forEach((f) => {
+  files.filter(f => showHidden || !f.isHidden).forEach((f) => {
     const div = document.createElement("div");
     
     div.className = "file-item";
@@ -143,6 +149,14 @@ function renderFiles(files) {
     if (shouldHighlightFolder(f)) {
       div.classList.add("highlight-folder");
       div.title = "Important folder";
+    }
+
+    if (f.isHidden) {
+      div.classList.add("hidden-file");
+    }
+
+    if (f.isProtected) {
+      div.classList.add("protected-file");
     }
 
     const icon = document.createElement("i");
@@ -306,6 +320,29 @@ function updateToolbar() {
     toolbarButton("New Folder", "fas fa-folder-plus", createNewFolder)
   );
 
+  // ---- Show hidden toggle ----
+  const hiddenToggle = document.createElement("label");
+  hiddenToggle.style.display = "flex";
+  hiddenToggle.style.alignItems = "center";
+  hiddenToggle.style.gap = "6px";
+  hiddenToggle.style.marginLeft = "auto";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = showHidden;
+
+  checkbox.onchange = () => {
+    showHidden = checkbox.checked;
+    loadDir(currentPath);
+  };
+
+  const text = document.createElement("span");
+  text.innerText = "Show hidden";
+
+  hiddenToggle.appendChild(checkbox);
+  hiddenToggle.appendChild(text);
+
+  bar.appendChild(hiddenToggle);
 }
 
 function toolbarButton(label, iconClass, onClick, disabled = false) {

@@ -5,6 +5,7 @@ import mimetypes
 from aiohttp import web
 import zipfile
 import io
+import os
 
 DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
 
@@ -35,6 +36,23 @@ class FileSystemObject:
 
     def isFile(self) -> bool:
         return self.path.is_file()
+    
+    def isHidden(self) -> bool:
+        return self.path.name.startswith(".")
+    
+    # def isProtected(self) -> bool:
+    #     try:
+    #         self.path.stat()
+
+    #         if self.isDir():
+    #             os.listdir(self.path)
+    #         else:
+    #             with open(self.path, "rb"):
+    #                 pass
+
+    #         return False
+    #     except (PermissionError, OSError):
+    #         return True
 
     # ---- Directory / file info ----
     def getDirectoryPath(self) -> str:
@@ -78,6 +96,8 @@ class FileSystemObject:
             "path": str(self.path),
             "isDir": self.isDir(),
             "isFile": self.isFile(),
+            "isHidden": self.isHidden(),
+            #"isProtected": self.isProtected(),
             "directory": self.getDirectoryPath(),
         }
 
@@ -126,13 +146,26 @@ class FileSystemService:
     def _resolve(self, user_path: str) -> Path:
         if not user_path:
             raise FileSystemError("Path is required")
+        
+        # Reject ~ explicitly (no expanduser semantics)
+        if user_path.startswith("~"):
+            raise FileSystemError("Home expansion is not allowed")
 
-        p = Path(user_path).expanduser().resolve()
+        raw = Path(user_path)
 
+        # If absolute, use it as-is
+        if raw.is_absolute():
+            p = raw.resolve()
+        else:
+            # Relative paths are always relative to base_dir
+            p = (self.base_dir / raw).resolve()
+
+        # Enforce sandbox
         if not p.is_relative_to(self.base_dir):
-            raise FileSystemError("Access outside /home/deck is forbidden")
+            raise FileSystemError("Access outside base directory is forbidden")
 
         return p
+
 
     # ---- Directory operations ----
     def list_dir(self, path: str = "") -> List[FileSystemObject]:

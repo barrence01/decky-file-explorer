@@ -7,12 +7,20 @@ body {
 
 /* ---------- Header ---------- */
 header {
-  height: 48px;
+  height: 10%;
+  max-height: 30%;
   background: #1f2937;
   color: #fff;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   padding: 0 12px;
+}
+
+@media (max-width: 600px) {
+  .header-title {
+    display: none;
+  }
 }
 
 .hamburger {
@@ -77,6 +85,7 @@ header {
   background: #fff;
   padding: 8px;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   border-bottom: 1px solid #ddd;
 }
@@ -269,7 +278,7 @@ header {
   color: #fff;
   padding: 16px;
   border-radius: 8px;
-  width: 40%;
+  width: 50%;
 }
 
 .modal-content-media.preview {
@@ -280,10 +289,9 @@ header {
 .modal-content-media.preview img,
 .modal-content-media.preview video {
   max-width: 100%;
-  max-height: 80vh;
 }
 
-/* ---------- File HIghlight ---------- */
+/* ---------- File Highlight ---------- */
 .file-item.highlight-folder {
   background: rgba(59, 130, 246, 0.15);
   border-left: 4px solid #3b82f6;
@@ -291,4 +299,14 @@ header {
 
 .file-item.highlight-folder .fa-folder {
   color: #3b82f6;
+}
+
+.file-item.hidden-file {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.protected-file {
+  opacity: 0.4;
+  pointer-events: none;
 }

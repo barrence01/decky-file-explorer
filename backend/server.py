@@ -1,4 +1,4 @@
-from aiohttp import web
+from aiohttp import ClientConnectionResetError, web
 from pathlib import Path
 import asyncio
 import secrets
@@ -145,7 +145,7 @@ class WebServer:
             AUTH_COOKIE,
             token,
             httponly=True,
-            secure=True,      # ⚠ requires HTTPS
+            secure=False,      
             samesite="Strict"
         )
         return response
@@ -368,7 +368,7 @@ class WebServer:
         if not obj.isFile():
             raise web.HTTPBadRequest(reason="Not a file")
 
-        file_path = Path(path)
+        file_path = obj.path
         file_size = file_path.stat().st_size
 
         mime, _ = mimetypes.guess_type(path)
@@ -394,20 +394,24 @@ class WebServer:
             }
 
             response = web.StreamResponse(status=206, headers=headers)
-            await response.prepare(request)
+            try:
+                await response.prepare(request)
 
-            with open(file_path, "rb") as f:
-                f.seek(start)
-                remaining = chunk_size
+                with open(file_path, "rb") as f:
+                    f.seek(start)
+                    remaining = chunk_size
 
-                while remaining > 0:
-                    data = f.read(min(64 * 1024, remaining))
-                    if not data:
-                        break
-                    await response.write(data)
-                    remaining -= len(data)
+                    while remaining > 0:
+                        data = f.read(min(64 * 1024, remaining))
+                        if not data:
+                            break
+                        await response.write(data)
+                        remaining -= len(data)
 
-            await response.write_eof()
+                await response.write_eof()
+            except (ClientConnectionResetError, asyncio.CancelledError):
+                decky.logger.debug("Client disconnected during file streaming")
+            
             return response
 
         # ---- Fallback: no Range header ----
@@ -419,13 +423,18 @@ class WebServer:
         }
 
         response = web.StreamResponse(headers=headers)
-        await response.prepare(request)
+        
+        try:
+            await response.prepare(request)
 
-        with open(file_path, "rb") as f:
-            while chunk := f.read(64 * 1024):
-                await response.write(chunk)
+            with open(file_path, "rb") as f:
+                while chunk := f.read(64 * 1024):
+                    await response.write(chunk)
 
-        await response.write_eof()
+            await response.write_eof()
+        except (ClientConnectionResetError, asyncio.CancelledError):
+            decky.logger.debug("Client disconnected during fallback streaming")
+
         return response
 
 
