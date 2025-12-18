@@ -5,6 +5,8 @@ import secrets
 import hashlib
 import hmac
 import mimetypes
+import os
+import socket
 
 from backend.filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
 
@@ -19,8 +21,19 @@ HOME_DECK_DIR = "/home/deck"
 AUTH_COOKIE = "auth_token"
 
 # Load user's settings
-settings = SettingsManager(name="credentials", settings_directory=SETTINGS_DIR)
-settings.read()
+settings_credentials = SettingsManager(name="credentials", settings_directory=SETTINGS_DIR)
+settings_credentials.read()
+
+settings_server = SettingsManager(name="server_settings", settings_directory=SETTINGS_DIR)
+settings_server.read()
+
+
+# =========================
+# Exceptions
+# =========================
+
+class PortAlreadyInUseError(Exception):
+    pass
 
 
 @web.middleware
@@ -50,20 +63,20 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 def check_credentials():
-    login = settings.getSetting("userLogin")
-    password = settings.getSetting("password")
+    login = settings_credentials.getSetting("user_login")
+    password = settings_credentials.getSetting("password_hash")
     if(login is None or login.strip() == ''):
-        settings.setSetting("userLogin", "admin")
+        settings_credentials.setSetting("user_login", "admin")
     if(password is None or password.strip() == ''):
-        settings.setSetting("password_hash", hash_password("admin"))
+        settings_credentials.setSetting("password_hash", hash_password("admin"))
 
 class WebServer:
     def __init__(
         self,
         base_dir: Path,
-        fs: FileSystemService = FileSystemService(Path("/home/deck")),
+        fs: FileSystemService = FileSystemService(settings_server.getSetting("base_dir") or os.path.expanduser("~")),
         host="0.0.0.0",
-        port=8082
+        port=settings_server.getSetting("port") or 8082
     ):
         self.base_dir = base_dir
         self.webui_dir = base_dir / "webui"
@@ -127,8 +140,8 @@ class WebServer:
         if not input_login or not input_password:
             raise web.HTTPBadRequest(reason="Missing credentials")
 
-        stored_login = settings.getSetting("userLogin")
-        stored_password_hash = settings.getSetting("password_hash")
+        stored_login = settings_credentials.getSetting("user_login")
+        stored_password_hash = settings_credentials.getSetting("password_hash")
 
         input_password_hash = hash_password(input_password)
 
@@ -443,18 +456,36 @@ class WebServer:
     # --------------------
 
     async def start(self):
-        self.runner = web.AppRunner(self.app)
-        await self.runner.setup()
+        try:
+            self.runner = web.AppRunner(self.app)
+            await self.runner.setup()
 
-        self.site = web.TCPSite(
-            self.runner,
-            host=self.host,
-            port=self.port
-        )
-        await self.site.start()
+            self.site = web.TCPSite(
+                self.runner,
+                host=self.host,
+                port=self.port
+            )
+            await self.site.start()
+        except OSError as e:
+            if e.errno == 98:
+                decky.logger.error(f"Port {self.port} is already in use")
+                raise PortAlreadyInUseError(f"Port {self.port} is already in use")
+            else:
+                raise
 
     async def stop(self):
         if self.site:
             await self.site.stop()
         if self.runner:
             await self.runner.cleanup()
+
+    async def is_running(self) -> bool:
+        return self.runner and self.site
+    
+    async def get_ipv4():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+        finally:
+            s.close()

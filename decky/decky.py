@@ -11,8 +11,11 @@ import sys
 
 # Mimic Decky's settings directory
 DECKY_PLUGIN_SETTINGS_DIR = Path("./.decky_settings")
-
 DECKY_PLUGIN_SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+DECKY_PLUGIN_DIR = Path("./.decky_plugin")
+DECKY_PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
+DECKY_PLUGIN_LOG_DIR = Path("./.decky_log")
+DECKY_PLUGIN_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # ----------------------------
 # Logging setup

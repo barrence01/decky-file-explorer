@@ -6,6 +6,10 @@ import logging
 # --------------------
 DECKY_PLUGIN_SETTINGS_DIR = Path("./.decky_settings")
 DECKY_PLUGIN_SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+DECKY_PLUGIN_DIR = Path("./.decky_plugin")
+DECKY_PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
+DECKY_PLUGIN_LOG_DIR = Path("./.decky_log")
+DECKY_PLUGIN_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # --------------------
 # Logger
@@ -24,4 +28,6 @@ if not logger.handlers:
 __all__ = [
     "logger",
     "DECKY_PLUGIN_SETTINGS_DIR",
+    "DECKY_PLUGIN_DIR",
+    "DECKY_PLUGIN_LOG_DIR"
 ]

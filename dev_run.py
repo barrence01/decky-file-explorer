@@ -4,12 +4,18 @@ import os
 
 from backend.server import WebServer
 from backend.filesystem import FileSystemService
+import decky
+from settings import SettingsManager
+
+SETTINGS_DIR = decky.DECKY_PLUGIN_SETTINGS_DIR
+settings_server = SettingsManager(name="server_settings", settings_directory=SETTINGS_DIR)
+settings_server.read()
 
 DIR_PATH = "/home/deck/Documents/Programacao/Steam Deck/decky-file-explorer/"
 
 async def main():
     # --- Filesystem test ---
-    fs = FileSystemService(os.path.expanduser("~"))
+    fs = FileSystemService(settings_server.getSetting("base-dir") or os.path.expanduser("~"))
     items = fs.list_dir("/home/deck/Documents")
 
     for obj in items:
@@ -26,8 +32,8 @@ async def main():
 
     await web_server.start()
 
-    print("Server running at http://localhost:8082/api/ping")
-    print("Also accessible via http://<deck-ip>:8082")
+    print(f"Server running at http://localhost:{web_server.port}/api/ping")
+    print(f"Also accessible via http://<deck-ip>:{web_server.port}")
 
     try:
         while True:
