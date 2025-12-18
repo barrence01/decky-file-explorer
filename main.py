@@ -8,6 +8,7 @@ from backend.filesystem import (
 )
 
 from pathlib import Path
+import os
 
 SETTINGS_DIR = decky.DECKY_PLUGIN_SETTINGS_DIR
 SCRIPT_DIR = decky.DECKY_PLUGIN_DIR
@@ -17,7 +18,7 @@ LOG_DIR = decky.DECKY_PLUGIN_LOG_DIR
 settings = SettingsManager(name="settings", settings_directory=SETTINGS_DIR)
 settings.read()
 
-fs = FileSystemService(Path("/home/deck"))
+fs = FileSystemService(os.path.expanduser("~"))
 
 
 class Plugin:

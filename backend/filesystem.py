@@ -126,13 +126,26 @@ class FileSystemService:
     def _resolve(self, user_path: str) -> Path:
         if not user_path:
             raise FileSystemError("Path is required")
+        
+        # Reject ~ explicitly (no expanduser semantics)
+        if user_path.startswith("~"):
+            raise FileSystemError("Home expansion is not allowed")
 
-        p = Path(user_path).expanduser().resolve()
+        raw = Path(user_path)
 
+        # If absolute, use it as-is
+        if raw.is_absolute():
+            p = raw.resolve()
+        else:
+            # Relative paths are always relative to base_dir
+            p = (self.base_dir / raw).resolve()
+
+        # Enforce sandbox
         if not p.is_relative_to(self.base_dir):
-            raise FileSystemError("Access outside /home/deck is forbidden")
+            raise FileSystemError("Access outside base directory is forbidden")
 
         return p
+
 
     # ---- Directory operations ----
     def list_dir(self, path: str = "") -> List[FileSystemObject]:

@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+import os
 
 from backend.server import WebServer
 from backend.filesystem import FileSystemService
@@ -8,7 +9,7 @@ DIR_PATH = "/home/deck/Documents/Programacao/Steam Deck/decky-file-explorer/"
 
 async def main():
     # --- Filesystem test ---
-    fs = FileSystemService(Path("/home/deck"))
+    fs = FileSystemService(os.path.expanduser("~"))
     items = fs.list_dir("/home/deck/Documents")
 
     for obj in items:
