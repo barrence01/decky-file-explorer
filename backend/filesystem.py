@@ -5,6 +5,7 @@ import mimetypes
 from aiohttp import web
 import zipfile
 import io
+import os
 
 DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
 
@@ -35,6 +36,23 @@ class FileSystemObject:
 
     def isFile(self) -> bool:
         return self.path.is_file()
+    
+    def isHidden(self) -> bool:
+        return self.path.name.startswith(".")
+    
+    # def isProtected(self) -> bool:
+    #     try:
+    #         self.path.stat()
+
+    #         if self.isDir():
+    #             os.listdir(self.path)
+    #         else:
+    #             with open(self.path, "rb"):
+    #                 pass
+
+    #         return False
+    #     except (PermissionError, OSError):
+    #         return True
 
     # ---- Directory / file info ----
     def getDirectoryPath(self) -> str:
@@ -78,6 +96,8 @@ class FileSystemObject:
             "path": str(self.path),
             "isDir": self.isDir(),
             "isFile": self.isFile(),
+            "isHidden": self.isHidden(),
+            #"isProtected": self.isProtected(),
             "directory": self.getDirectoryPath(),
         }
 

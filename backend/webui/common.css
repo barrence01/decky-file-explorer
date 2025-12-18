@@ -292,7 +292,7 @@ header {
   max-height: 80vh;
 }
 
-/* ---------- File HIghlight ---------- */
+/* ---------- File Highlight ---------- */
 .file-item.highlight-folder {
   background: rgba(59, 130, 246, 0.15);
   border-left: 4px solid #3b82f6;
@@ -300,4 +300,14 @@ header {
 
 .file-item.highlight-folder .fa-folder {
   color: #3b82f6;
+}
+
+.file-item.hidden-file {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.protected-file {
+  opacity: 0.4;
+  pointer-events: none;
 }
