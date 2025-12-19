@@ -1,11 +1,16 @@
-import asyncio
-from pathlib import Path
-import os
-
-from backend.server import WebServer
-from backend.filesystem import FileSystemService
 import decky
 from settings import SettingsManager
+import sys
+from pathlib import Path
+
+SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
+SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
+BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "backend"
+LOG_DIR = Path(decky.DECKY_PLUGIN_LOG_DIR)
+sys.path.insert(0, str(BACKEND_DIR))
+
+import asyncio
+from server import WebServer
 
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
 settings_server = SettingsManager(name="server_settings", settings_directory=SETTINGS_DIR)
@@ -15,7 +20,6 @@ DIR_PATH = Path(decky.DECKY_PLUGIN_DIR)
 
 async def main():
     web_server = WebServer(
-        base_dir=Path(DIR_PATH / "backend"),
         host="0.0.0.0",
         port=8082
     )

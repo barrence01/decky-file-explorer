@@ -10,13 +10,14 @@ import mimetypes
 import os
 import socket
 
-from backend.filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
+from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
 
 import decky
 from settings import SettingsManager
 
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
 PLUGIN_DIR = Path(decky.DECKY_PLUGIN_DIR)
+BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "backend"
 WEBUI_DIR = PLUGIN_DIR / "backend/webui"
 AUTH_COOKIE = "auth_token"
 
@@ -77,16 +78,11 @@ def check_credentials():
 class WebServer:
     def __init__(
         self,
-        base_dir: Path,
         fs: FileSystemService = FileSystemService(settings_server.getSetting("base_dir") or os.path.expanduser("~")),
         host="0.0.0.0",
         port=settings_server.getSetting("port") or 8082
     ):
-        self.base_dir = base_dir or PLUGIN_DIR
-        if base_dir:
-            self.webui_dir = self.base_dir / "webui"
-        else:
-            self.webui_dir = WEBUI_DIR
+        self.webui_dir = WEBUI_DIR
         self.fs = fs
 
         self.host = host
