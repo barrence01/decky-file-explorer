@@ -1,33 +1,38 @@
 from pathlib import Path
 import logging
+from .decky import _setup_logging 
+import __main__
+import os
 
 # --------------------
 # Settings dir
 # --------------------
-DECKY_PLUGIN_SETTINGS_DIR = Path("./.decky_settings")
-DECKY_PLUGIN_SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
-DECKY_PLUGIN_DIR = Path("./.decky_plugin")
-DECKY_PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
-DECKY_PLUGIN_LOG_DIR = Path("./.decky_log")
-DECKY_PLUGIN_LOG_DIR.mkdir(parents=True, exist_ok=True)
+SETTINGS_DIR = Path("./.decky_settings")
+SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+DECKY_PLUGIN_SETTINGS_DIR = str(SETTINGS_DIR)
+
+PLUGIN_DIR = Path(os.path.dirname(os.path.abspath(__main__.__file__)))
+PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
+DECKY_PLUGIN_DIR = str(PLUGIN_DIR)
+
+RUNTIME_DIR = Path("./.decky_plugin_runtime")
+RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+DECKY_PLUGIN_RUNTIME_DIR = str(RUNTIME_DIR)
+
+LOG_DIR = Path("./.decky_log")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+DECKY_PLUGIN_LOG_DIR = str(LOG_DIR)
 
 # --------------------
 # Logger
 # --------------------
+_setup_logging()
 logger = logging.getLogger("decky")
-logger.setLevel(logging.INFO)
-
-if not logger.handlers:
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "[%(asctime)s] [%(levelname)s] %(name)s: %(message)s"
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
 
 __all__ = [
     "logger",
     "DECKY_PLUGIN_SETTINGS_DIR",
     "DECKY_PLUGIN_DIR",
-    "DECKY_PLUGIN_LOG_DIR"
+    "DECKY_PLUGIN_RUNTIME_DIR",
+    "DECKY_PLUGIN_LOG_DIR",
 ]

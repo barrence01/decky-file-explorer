@@ -13,11 +13,9 @@ from backend.filesystem import FileSystemError, FileSystemService, FileAlreadyEx
 import decky
 from settings import SettingsManager
 
-SETTINGS_DIR = decky.DECKY_PLUGIN_SETTINGS_DIR
-BASE_DIR = Path(__file__).parent
-WEBUI_DIR = BASE_DIR / "backend/webui"
-HOME_DECK_DIR = "/home/deck"
-
+SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
+PLUGIN_DIR = Path(decky.DECKY_PLUGIN_DIR)
+WEBUI_DIR = PLUGIN_DIR / "backend/webui"
 AUTH_COOKIE = "auth_token"
 
 # Load user's settings
@@ -27,6 +25,7 @@ settings_credentials.read()
 settings_server = SettingsManager(name="server_settings", settings_directory=SETTINGS_DIR)
 settings_server.read()
 
+HOME_DECK_DIR = settings_server.getSetting("base_dir") or os.path.expanduser("~")
 
 # =========================
 # Exceptions
@@ -35,6 +34,10 @@ settings_server.read()
 class PortAlreadyInUseError(Exception):
     pass
 
+
+# =========================
+# Support methods
+# =========================
 
 @web.middleware
 async def auth_middleware(request, handler):
@@ -58,7 +61,6 @@ async def auth_middleware(request, handler):
 
     return await handler(request)
 
-
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
@@ -78,8 +80,8 @@ class WebServer:
         host="0.0.0.0",
         port=settings_server.getSetting("port") or 8082
     ):
-        self.base_dir = base_dir
-        self.webui_dir = base_dir / "webui"
+        self.base_dir = base_dir or PLUGIN_DIR
+        self.webui_dir = WEBUI_DIR
         self.fs = fs
 
         self.host = host
@@ -456,6 +458,7 @@ class WebServer:
     # --------------------
 
     async def start(self):
+        decky.logger.info("Starting webUI server.")
         try:
             self.runner = web.AppRunner(self.app)
             await self.runner.setup()
@@ -471,9 +474,11 @@ class WebServer:
                 decky.logger.error(f"Port {self.port} is already in use")
                 raise PortAlreadyInUseError(f"Port {self.port} is already in use")
             else:
+                decky.logger.error(f"An unknown error has occured while starting the webUI server.", e)
                 raise
 
     async def stop(self):
+        decky.logger.info("Stopping webUI server.")
         if self.site:
             await self.site.stop()
         if self.runner:
