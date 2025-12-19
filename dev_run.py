@@ -1,39 +1,39 @@
-import asyncio
+import decky
+from settings import SettingsManager
+import sys
 from pathlib import Path
-import os
 
-from backend.server import WebServer
-from backend.filesystem import FileSystemService
+SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
+SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
+BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "backend"
+LOG_DIR = Path(decky.DECKY_PLUGIN_LOG_DIR)
+sys.path.insert(0, str(BACKEND_DIR))
 
-DIR_PATH = "/home/deck/Documents/Programacao/Steam Deck/decky-file-explorer/"
+import asyncio
+from server import WebServer
+
+SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
+settings_server = SettingsManager(name="server_settings", settings_directory=SETTINGS_DIR)
+settings_server.read()
+
+DIR_PATH = Path(decky.DECKY_PLUGIN_DIR)
 
 async def main():
-    # --- Filesystem test ---
-    fs = FileSystemService(os.path.expanduser("~"))
-    items = fs.list_dir("/home/deck/Documents")
-
-    for obj in items:
-        print(obj.to_dict())
-
-    # --- Web server ---
-    base_dir = Path(DIR_PATH + "/backend")
-
     web_server = WebServer(
-        base_dir=base_dir,
         host="0.0.0.0",
         port=8082
     )
 
     await web_server.start()
 
-    print("Server running at http://localhost:8082/api/ping")
-    print("Also accessible via http://<deck-ip>:8082")
+    decky.logger.info(f"Server running at http://localhost:{web_server.port}/api/ping")
+    decky.logger.info(f"Also accessible via http://<deck-ip>:{web_server.port}")
 
     try:
         while True:
             await asyncio.sleep(3600)
     except KeyboardInterrupt:
-        print("Shutting down server...")
+        decky.logger.info("Shutting down server...")
     finally:
         await web_server.stop()
 

@@ -331,10 +331,10 @@ async def upload(request: web.Request):
     reader = await request.multipart()
     field = await reader.next()
 
-    stream = fs.open_write_stream(f"uploads/{field.filename}")
+    stream = fs.open_write_stream(f"uploads/{field.filename}") # type: ignore
 
     try:
-        while chunk := await field.read_chunk():
+        while chunk := await field.read_chunk(): # type: ignore
             stream.write(chunk)
     finally:
         stream.close()

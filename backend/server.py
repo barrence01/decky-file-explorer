@@ -1,27 +1,46 @@
-from aiohttp import ClientConnectionResetError, web
+import aiohttp
+from aiohttp import ClientConnectionResetError, web, BodyPartReader, MultipartReader
 from pathlib import Path
+from typing import Union
 import asyncio
 import secrets
 import hashlib
 import hmac
 import mimetypes
+import os
+import socket
 
-from backend.filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
+from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
 
 import decky
 from settings import SettingsManager
 
-SETTINGS_DIR = decky.DECKY_PLUGIN_SETTINGS_DIR
-BASE_DIR = Path(__file__).parent
-WEBUI_DIR = BASE_DIR / "backend/webui"
-HOME_DECK_DIR = "/home/deck"
-
+SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
+PLUGIN_DIR = Path(decky.DECKY_PLUGIN_DIR)
+BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "backend"
+WEBUI_DIR = PLUGIN_DIR / "backend/webui"
 AUTH_COOKIE = "auth_token"
 
 # Load user's settings
-settings = SettingsManager(name="credentials", settings_directory=SETTINGS_DIR)
-settings.read()
+settings_credentials = SettingsManager(name="credentials", settings_directory=SETTINGS_DIR)
+settings_credentials.read()
 
+settings_server = SettingsManager(name="server_settings", settings_directory=SETTINGS_DIR)
+settings_server.read()
+
+HOME_DECK_DIR = settings_server.getSetting("base_dir") or os.path.expanduser("~")
+
+# =========================
+# Exceptions
+# =========================
+
+class PortAlreadyInUseError(Exception):
+    pass
+
+
+# =========================
+# Support methods
+# =========================
 
 @web.middleware
 async def auth_middleware(request, handler):
@@ -45,28 +64,25 @@ async def auth_middleware(request, handler):
 
     return await handler(request)
 
-
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 def check_credentials():
-    login = settings.getSetting("userLogin")
-    password = settings.getSetting("password")
+    login = settings_credentials.getSetting("user_login")
+    password = settings_credentials.getSetting("password_hash")
     if(login is None or login.strip() == ''):
-        settings.setSetting("userLogin", "admin")
+        settings_credentials.setSetting("user_login", "admin")
     if(password is None or password.strip() == ''):
-        settings.setSetting("password_hash", hash_password("admin"))
+        settings_credentials.setSetting("password_hash", hash_password("admin"))
 
 class WebServer:
     def __init__(
         self,
-        base_dir: Path,
-        fs: FileSystemService = FileSystemService(Path("/home/deck")),
+        fs: FileSystemService = FileSystemService(settings_server.getSetting("base_dir") or os.path.expanduser("~")),
         host="0.0.0.0",
-        port=8082
+        port=settings_server.getSetting("port") or 8082
     ):
-        self.base_dir = base_dir
-        self.webui_dir = base_dir / "webui"
+        self.webui_dir = WEBUI_DIR
         self.fs = fs
 
         self.host = host
@@ -127,14 +143,12 @@ class WebServer:
         if not input_login or not input_password:
             raise web.HTTPBadRequest(reason="Missing credentials")
 
-        stored_login = settings.getSetting("userLogin")
-        stored_password_hash = settings.getSetting("password_hash")
+        stored_login = settings_credentials.getSetting("user_login")
+        stored_password_hash = bytes.fromhex(settings_credentials.getSetting("password_hash")) # type: ignore
 
-        input_password_hash = hash_password(input_password)
+        input_password_hash = bytes.fromhex(hash_password(input_password))
 
-        if input_login != stored_login or not hmac.compare_digest(
-            input_password_hash, stored_password_hash
-        ):
+        if input_login != stored_login or not hmac.compare_digest(input_password_hash, stored_password_hash):
             raise web.HTTPUnauthorized(reason="Wrong credential")
 
         token = secrets.token_urlsafe(32)
@@ -165,7 +179,7 @@ class WebServer:
         return web.json_response({"logged": True})
 
     # --------------------
-    # PROTECTED ENDPOINTS
+    # PROTECTED ENDPOINTS - File operations
     # --------------------
 
     async def ping(self, request):
@@ -288,38 +302,70 @@ class WebServer:
             return web.json_response({"error": str(e)}, status=400)
         except FileExistsError:
             return web.json_response({"error": "Folder already exists"}, status=409)
+        
+    # =========================
+    # PROTECTED ENDPOINTS - File streaming
+    # =========================
 
     async def upload(self, request: web.Request):
-        reader = await request.multipart()
+        if not request.content_type.startswith("multipart/"):
+            raise web.HTTPUnsupportedMediaType(
+                reason="Content-Type must be multipart/form-data"
+            )
 
-        field = await reader.next()
-        if field.name != "path":
+        reader: Union[MultipartReader, BodyPartReader] = await request.multipart()
+
+        target_dir = None
+        file_field: Union[BodyPartReader, None] = None
+
+        if not isinstance(reader, MultipartReader):
+            raise web.HTTPBadRequest(reason="Invalid multipart data")
+
+        async for field in reader: # type: ignore
+            field: aiohttp.BodyPartReader
+
+            if field.name == "path":
+                target_dir = (await field.read()).decode().strip()
+            elif field.name == "file":
+                file_field = field
+
+        if not target_dir:
             raise web.HTTPBadRequest(reason="Missing upload path")
 
-        target_dir = (await field.read()).decode()
-
-        field = await reader.next()
-        if not field or not field.filename:
+        if not file_field or not file_field.filename:
             raise web.HTTPBadRequest(reason="Missing file")
 
-        target_path = f"{target_dir.rstrip('/')}/{field.filename}"
+        filename = os.path.basename(file_field.filename)
+        target_path = os.path.join(target_dir, filename)
+
+        loop = asyncio.get_running_loop()
 
         try:
             stream = self.fs.open_write_stream(target_path)
 
             try:
-                while chunk := await field.read_chunk():
-                    stream.write(chunk)
-            finally:
-                stream.close()
+                while True:
+                    chunk = await file_field.read_chunk()
+                    if not chunk:
+                        break
 
-            return web.json_response({"status": "ok"})
+                    # Write in executor to avoid blocking event loop
+                    await loop.run_in_executor(None, stream.write, chunk)
+
+            finally:
+                await loop.run_in_executor(None, stream.close)
+
+            return web.json_response({
+                "status": "ok",
+                "filename": filename
+            })
 
         except FileAlreadyExistsError:
             return web.json_response(
                 {"error": "File already exists"},
                 status=400
             )
+
 
     async def download(self, request: web.Request):
         data = await request.json()
@@ -443,18 +489,41 @@ class WebServer:
     # --------------------
 
     async def start(self):
-        self.runner = web.AppRunner(self.app)
-        await self.runner.setup()
+        decky.logger.info("Starting webUI server.")
+        try:
+            self.runner = web.AppRunner(self.app)
+            await self.runner.setup()
 
-        self.site = web.TCPSite(
-            self.runner,
-            host=self.host,
-            port=self.port
-        )
-        await self.site.start()
+            self.site = web.TCPSite(
+                self.runner,
+                host=self.host,
+                port=self.port
+            )
+            await self.site.start()
+        except OSError as e:
+            if e.errno == 98:
+                decky.logger.error(f"Port {self.port} is already in use")
+                raise PortAlreadyInUseError(f"Port {self.port} is already in use")
+            else:
+                decky.logger.error(f"An unknown error has occured while starting the webUI server.", e)
+                raise
 
     async def stop(self):
+        decky.logger.info("Stopping webUI server.")
         if self.site:
             await self.site.stop()
+            self.site = None
         if self.runner:
             await self.runner.cleanup()
+            self.site = None
+
+    async def is_running(self) -> bool:
+        return self.runner is not None and self.site is not None
+    
+    async def get_ipv4(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+        finally:
+            s.close()

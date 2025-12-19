@@ -17,21 +17,24 @@ def fs(tmp_path: Path):
     """
     Isolated filesystem rooted in pytest temp dir
     """
-    return FileSystemService(tmp_path)
+    return FileSystemService(str(tmp_path))
 
 
 @pytest_asyncio.fixture
-async def client(aiohttp_client, fs, tmp_path):
+async def client(aiohttp_client, fs, tmp_path, monkeypatch):
     """
     WebServer instance using temp filesystem and temp webui dir
     """
-    # fake webui so static route does not explode
     webui = tmp_path / "webui"
     webui.mkdir()
     (webui / "index.html").write_text("<html>OK</html>")
 
+    monkeypatch.setattr(
+        "backend.server.WEBUI_DIR",
+        webui
+    )
+
     server = WebServer(
-        base_dir=tmp_path,
         fs=fs,
         host="127.0.0.1",
         port=0,
