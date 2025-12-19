@@ -1,5 +1,7 @@
-from aiohttp import ClientConnectionResetError, web
+import aiohttp
+from aiohttp import ClientConnectionResetError, web, BodyPartReader, MultipartReader
 from pathlib import Path
+from typing import Union
 import asyncio
 import secrets
 import hashlib
@@ -81,7 +83,10 @@ class WebServer:
         port=settings_server.getSetting("port") or 8082
     ):
         self.base_dir = base_dir or PLUGIN_DIR
-        self.webui_dir = WEBUI_DIR
+        if base_dir:
+            self.webui_dir = self.base_dir / "webui"
+        else:
+            self.webui_dir = WEBUI_DIR
         self.fs = fs
 
         self.host = host
@@ -143,13 +148,11 @@ class WebServer:
             raise web.HTTPBadRequest(reason="Missing credentials")
 
         stored_login = settings_credentials.getSetting("user_login")
-        stored_password_hash = settings_credentials.getSetting("password_hash")
+        stored_password_hash = bytes.fromhex(settings_credentials.getSetting("password_hash")) # type: ignore
 
-        input_password_hash = hash_password(input_password)
+        input_password_hash = bytes.fromhex(hash_password(input_password))
 
-        if input_login != stored_login or not hmac.compare_digest(
-            input_password_hash, stored_password_hash
-        ):
+        if input_login != stored_login or not hmac.compare_digest(input_password_hash, stored_password_hash):
             raise web.HTTPUnauthorized(reason="Wrong credential")
 
         token = secrets.token_urlsafe(32)
@@ -180,7 +183,7 @@ class WebServer:
         return web.json_response({"logged": True})
 
     # --------------------
-    # PROTECTED ENDPOINTS
+    # PROTECTED ENDPOINTS - File operations
     # --------------------
 
     async def ping(self, request):
@@ -303,38 +306,70 @@ class WebServer:
             return web.json_response({"error": str(e)}, status=400)
         except FileExistsError:
             return web.json_response({"error": "Folder already exists"}, status=409)
+        
+    # =========================
+    # PROTECTED ENDPOINTS - File streaming
+    # =========================
 
     async def upload(self, request: web.Request):
-        reader = await request.multipart()
+        if not request.content_type.startswith("multipart/"):
+            raise web.HTTPUnsupportedMediaType(
+                reason="Content-Type must be multipart/form-data"
+            )
 
-        field = await reader.next()
-        if field.name != "path":
+        reader: Union[MultipartReader, BodyPartReader] = await request.multipart()
+
+        target_dir = None
+        file_field: Union[BodyPartReader, None] = None
+
+        if not isinstance(reader, MultipartReader):
+            raise web.HTTPBadRequest(reason="Invalid multipart data")
+
+        async for field in reader: # type: ignore
+            field: aiohttp.BodyPartReader
+
+            if field.name == "path":
+                target_dir = (await field.read()).decode().strip()
+            elif field.name == "file":
+                file_field = field
+
+        if not target_dir:
             raise web.HTTPBadRequest(reason="Missing upload path")
 
-        target_dir = (await field.read()).decode()
-
-        field = await reader.next()
-        if not field or not field.filename:
+        if not file_field or not file_field.filename:
             raise web.HTTPBadRequest(reason="Missing file")
 
-        target_path = f"{target_dir.rstrip('/')}/{field.filename}"
+        filename = os.path.basename(file_field.filename)
+        target_path = os.path.join(target_dir, filename)
+
+        loop = asyncio.get_running_loop()
 
         try:
             stream = self.fs.open_write_stream(target_path)
 
             try:
-                while chunk := await field.read_chunk():
-                    stream.write(chunk)
-            finally:
-                stream.close()
+                while True:
+                    chunk = await file_field.read_chunk()
+                    if not chunk:
+                        break
 
-            return web.json_response({"status": "ok"})
+                    # Write in executor to avoid blocking event loop
+                    await loop.run_in_executor(None, stream.write, chunk)
+
+            finally:
+                await loop.run_in_executor(None, stream.close)
+
+            return web.json_response({
+                "status": "ok",
+                "filename": filename
+            })
 
         except FileAlreadyExistsError:
             return web.json_response(
                 {"error": "File already exists"},
                 status=400
             )
+
 
     async def download(self, request: web.Request):
         data = await request.json()
@@ -481,13 +516,15 @@ class WebServer:
         decky.logger.info("Stopping webUI server.")
         if self.site:
             await self.site.stop()
+            self.site = None
         if self.runner:
             await self.runner.cleanup()
+            self.site = None
 
     async def is_running(self) -> bool:
-        return self.runner and self.site
+        return self.runner is not None and self.site is not None
     
-    async def get_ipv4():
+    async def get_ipv4(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             s.connect(("8.8.8.8", 80))

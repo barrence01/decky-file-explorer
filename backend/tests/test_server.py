@@ -17,7 +17,7 @@ def fs(tmp_path: Path):
     """
     Isolated filesystem rooted in pytest temp dir
     """
-    return FileSystemService(tmp_path)
+    return FileSystemService(str(tmp_path))
 
 
 @pytest_asyncio.fixture

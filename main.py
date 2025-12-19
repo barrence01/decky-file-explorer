@@ -12,9 +12,9 @@ import os
 import socket
 import hashlib
 
-SETTINGS_DIR = decky.DECKY_PLUGIN_SETTINGS_DIR
-SCRIPT_DIR = decky.DECKY_PLUGIN_DIR
-LOG_DIR = decky.DECKY_PLUGIN_LOG_DIR
+SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
+SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
+LOG_DIR = Path(decky.DECKY_PLUGIN_LOG_DIR)
 
 # Load user's settings
 settings_credentials = SettingsManager(name="credentials", settings_directory=SETTINGS_DIR)
@@ -26,7 +26,7 @@ settings_server.read()
 fs = FileSystemService(settings_server.getSetting("base_dir") or os.path.expanduser("~"))
 
 class ServerStatus:
-    def __init__(self, status, ipv4_address, port, message = ""):
+    def __init__(self, status, ipv4_address, port: int, message = ""):
         if status:
             self.status = "online"
         else:
@@ -48,16 +48,16 @@ class Plugin:
         if self.web_server:
             return self.web_server.port
         else:
-            return int(self.settings_server.getSetting("port"))
+            return int(settings_server.getSetting("port")) # type: ignore
         
     def is_port_free(self, port:int):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex(('localhost', port)) != 0
     
-    def get_base_dir(self) -> str:
-        return settings_server.getSetting("base_dir") or os.path.expanduser("~")
+    def get_base_dir(self) -> Path:
+        return Path(settings_server.getSetting("base_dir") or os.path.expanduser("~"))
     
-    def hash_password(password: str) -> str:
+    def hash_password(self, password: str) -> str:
         return hashlib.sha256(password.encode("utf-8")).hexdigest()
     
     # ----------------------------
@@ -72,7 +72,7 @@ class Plugin:
         if is_online:
             return ServerStatus(is_online, await self.web_server.get_ipv4(), self.web_server.port)
         else:
-            return ServerStatus(is_online, None, await self.get_server_port(self))
+            return ServerStatus(is_online, None, self.get_server_port())
         
     async def start_file_explorer(self: 'Plugin') -> ServerStatus:
         try:
@@ -84,27 +84,27 @@ class Plugin:
                 )
 
             if await self.web_server.is_running():
-                return ServerStatus(True, await self.web_server.get_ipv4(), await self.get_server_port(self))
+                return ServerStatus(True, await self.web_server.get_ipv4(), self.get_server_port())
             else:
                 await self.web_server.start()
-                return ServerStatus(True, await self.web_server.get_ipv4(), await self.get_server_port(self))
+                return ServerStatus(True, await self.web_server.get_ipv4(), self.get_server_port())
         except Exception as e:
             decky.logger.error("There was an error when trying to start the server: ", e)
-            return ServerStatus(False, None, await self.get_server_port(self), e)
+            return ServerStatus(False, None, self.get_server_port(), str(e))
     
     async def stop_file_explorer(self: 'Plugin') -> ServerStatus:
         if self.web_server:
             await self.web_server.stop()
-        return ServerStatus(False, None, await self.get_server_port(self))
+        return ServerStatus(False, None, self.get_server_port())
     
     # ----------------------------
     # Access to settings files for the deckUI
     # ----------------------------
     async def get_server_setting( self: 'Plugin', key: str ) -> ApiResponse:
-        return ApiResponse(settings_server.getSetting( key ))
+        return ApiResponse(settings_server.getSetting( key )) # type: ignore
     
     async def get_credential_setting( self: 'Plugin', key: str ) -> ApiResponse:
-        return ApiResponse(settings_server.getSetting( key ))
+        return ApiResponse(settings_server.getSetting( key )) # type: ignore
     
     async def save_user_settings( self: 'Plugin', key: str, value ) -> ApiResponse:
         decky.logger.info("Changing settings - {}: {}".format( key, value ))
