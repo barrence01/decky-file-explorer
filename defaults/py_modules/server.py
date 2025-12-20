@@ -13,22 +13,29 @@ import socket
 from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
 
 import decky
-from settings import SettingsManager
+
+# Load user's settings
+from shared_settings import get_server_settings_manager, get_credentials_manager
+
+settings_credentials = get_credentials_manager()
+settings_server = get_server_settings_manager()
+
+# =========================
+# Constants
+# =========================
 
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
 PLUGIN_DIR = Path(decky.DECKY_PLUGIN_DIR)
 BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
 WEBUI_DIR = PLUGIN_DIR / "defaults/py_modules/webui"
 AUTH_COOKIE = "auth_token"
-
-# Load user's settings
-settings_credentials = SettingsManager(name="credentials", settings_directory=SETTINGS_DIR)
-settings_credentials.read()
-
-settings_server = SettingsManager(name="server_settings", settings_directory=SETTINGS_DIR)
-settings_server.read()
-
-HOME_DECK_DIR = settings_server.getSetting("base_dir") or os.path.expanduser("~")
+DEFAULT_PORT = 8082
+PASSWORD_FIELD = "password_hash"
+USERNAME_FIELD = "user_login"
+BASE_DIR_FIELD = "base_dir"
+PORT_FIELD = "port"
+HOST_FIELD = "host"
+AUTH_TOKEN_FIELD = "auth_tokens"
 
 # =========================
 # Exceptions
@@ -56,7 +63,7 @@ async def auth_middleware(request, handler):
 
     token = request.cookies.get(AUTH_COOKIE)
 
-    if not token or token not in request.app["auth_tokens"]:
+    if not token or token not in request.app[AUTH_TOKEN_FIELD]:
         return web.json_response(
             {"error": "Not logged in"},
             status=400
@@ -68,19 +75,41 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 def check_credentials():
-    login = settings_credentials.getSetting("user_login")
-    password = settings_credentials.getSetting("password_hash")
+    login = settings_credentials.getSetting(USERNAME_FIELD)
+    password = settings_credentials.getSetting(PASSWORD_FIELD)
     if(login is None or login.strip() == ''):
-        settings_credentials.setSetting("user_login", "admin")
+        settings_credentials.setSetting(USERNAME_FIELD, "admin")
     if(password is None or password.strip() == ''):
-        settings_credentials.setSetting("password_hash", hash_password("admin"))
+        settings_credentials.setSetting(PASSWORD_FIELD, hash_password("admin"))
+
+def check_server_settings():
+    if not settings_server.getSetting(BASE_DIR_FIELD):
+        settings_server.setSetting(BASE_DIR_FIELD, os.path.expanduser("~"))
+    if not settings_server.getSetting(PORT_FIELD):
+        settings_server.setSetting(PORT_FIELD, DEFAULT_PORT)
+
+def get_base_dir() -> str:
+    base_dir = settings_server.getSetting(BASE_DIR_FIELD)
+    if not base_dir:
+        base_dir = os.path.expanduser("~")
+        settings_server.setSetting(BASE_DIR_FIELD, base_dir)
+    decky.logger.info("Getting base_dir from settings: " + base_dir)
+    return base_dir
+
+def get_host_from_settings() -> str:
+    decky.logger.info("Getting host from settings: " + str(settings_server.getSetting(PORT_FIELD) or DEFAULT_PORT))
+    return settings_server.getSetting(HOST_FIELD) or "0.0.0.0"
+
+def get_port_from_settings() -> int:
+    decky.logger.info("Getting port from settings: " + str(settings_server.getSetting(PORT_FIELD) or DEFAULT_PORT))
+    return settings_server.getSetting(PORT_FIELD) or DEFAULT_PORT
 
 class WebServer:
     def __init__(
         self,
-        fs: FileSystemService = FileSystemService(settings_server.getSetting("base_dir") or os.path.expanduser("~")),
-        host="0.0.0.0",
-        port=settings_server.getSetting("port") or 8082
+        fs: FileSystemService = FileSystemService(get_base_dir()),
+        host=get_host_from_settings(),
+        port=get_port_from_settings()
     ):
         self.webui_dir = WEBUI_DIR
         self.fs = fs
@@ -89,7 +118,7 @@ class WebServer:
         self.port = port
 
         self.app = web.Application(middlewares=[auth_middleware])
-        self.app["auth_tokens"] = set()
+        self.app[AUTH_TOKEN_FIELD] = set()
 
         self.runner = None
         self.site = None
@@ -143,8 +172,8 @@ class WebServer:
         if not input_login or not input_password:
             raise web.HTTPBadRequest(reason="Missing credentials")
 
-        stored_login = settings_credentials.getSetting("user_login")
-        stored_password_hash = bytes.fromhex(settings_credentials.getSetting("password_hash")) # type: ignore
+        stored_login = settings_credentials.getSetting(USERNAME_FIELD)
+        stored_password_hash = bytes.fromhex(settings_credentials.getSetting(PASSWORD_FIELD)) # type: ignore
 
         input_password_hash = bytes.fromhex(hash_password(input_password))
 
@@ -152,7 +181,7 @@ class WebServer:
             raise web.HTTPUnauthorized(reason="Wrong credential")
 
         token = secrets.token_urlsafe(32)
-        self.app["auth_tokens"].add(token)
+        self.app[AUTH_TOKEN_FIELD].add(token)
 
         response = web.json_response({"status": "logged_in"})
         response.set_cookie(
@@ -168,7 +197,7 @@ class WebServer:
         token = request.cookies.get(AUTH_COOKIE)
 
         if token:
-            self.app["auth_tokens"].discard(token)
+            self.app[AUTH_TOKEN_FIELD].discard(token)
 
         response = web.json_response({"status": "logged_off"})
         response.del_cookie(AUTH_COOKIE)
@@ -188,12 +217,12 @@ class WebServer:
     async def list_dir(self, request):
         try:
             data = await request.json()
-            path = data.get("path", HOME_DECK_DIR)
+            path = data.get("path", get_base_dir())
         except Exception:
-            path = HOME_DECK_DIR
+            path = get_base_dir()
 
         if not path:
-            path = HOME_DECK_DIR
+            path = get_base_dir()
 
         try:
             selected_dir = self.fs.get_object(path)
@@ -493,7 +522,8 @@ class WebServer:
         try:
             self.runner = web.AppRunner(self.app)
             await self.runner.setup()
-
+            self.host = get_host_from_settings()
+            self.port = get_port_from_settings()
             self.site = web.TCPSite(
                 self.runner,
                 host=self.host,
@@ -515,7 +545,7 @@ class WebServer:
             self.site = None
         if self.runner:
             await self.runner.cleanup()
-            self.site = None
+            self.runner = None
 
     async def is_running(self) -> bool:
         return self.runner is not None and self.site is not None

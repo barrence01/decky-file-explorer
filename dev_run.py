@@ -19,10 +19,7 @@ settings_server.read()
 DIR_PATH = Path(decky.DECKY_PLUGIN_DIR)
 
 async def main():
-    web_server = WebServer(
-        host="0.0.0.0",
-        port=8082
-    )
+    web_server = WebServer()
 
     await web_server.start()
 

@@ -1,0 +1,11 @@
+{
+  "name": "DeckyFileExplorer",
+  "author": "Willyscoiote",
+  "flags": [],
+  "publish": {
+    "tags": [ "files", "server", "explorer", "store", "download", "upload" ],
+    "description": "Explore your Steam Deck files from your browser.",
+    "image": "https://avatars.githubusercontent.com/u/30810941?v=4"
+  },
+  "api_version": 1
+}

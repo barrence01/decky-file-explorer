@@ -34,20 +34,18 @@ def test_hash_password(plugin):
     expected = hashlib.sha256(b"admin").hexdigest()
     assert plugin.hash_password("admin") == expected
 
-@pytest.mark.asyncio
-async def test_get_server_port_without_server(monkeypatch, plugin):
+def test_get_server_port_without_server(monkeypatch, plugin):
     monkeypatch.setattr(
         main.settings_server,
         "getSetting",
         lambda key: 9090 if key == "port" else None
     )
 
-    assert await plugin.get_server_port() == 9090
+    assert plugin.get_server_port() == 9090
 
-@pytest.mark.asyncio
-async def test_get_server_port_with_server(plugin):
+def test_get_server_port_with_server(plugin):
     plugin.web_server = MagicMock(port=1234)
-    assert await plugin.get_server_port() == 1234
+    assert plugin.get_server_port() == 1234
 
 
 def test_is_port_free(plugin):
