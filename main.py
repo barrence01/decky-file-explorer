@@ -20,13 +20,10 @@ import hashlib
 
 
 # Load user's settings
-settings_credentials = SettingsManager(name="credentials", settings_directory=SETTINGS_DIR)
-settings_credentials.read()
+from shared_settings import get_server_settings_manager, get_credentials_manager
 
-settings_server = SettingsManager(name="server_settings", settings_directory=SETTINGS_DIR)
-settings_server.read()
-
-fs = FileSystemService(settings_server.getSetting("base_dir") or os.path.expanduser("~"))
+settings_credentials = get_credentials_manager()
+settings_server = get_server_settings_manager()
 
 class ServerStatus:
     def __init__(self, status:bool, ipv4_address, port: int | None):
@@ -74,7 +71,7 @@ class Plugin:
     def __init__(self):
         self.web_server = None
         
-    async def get_server_port(self) -> int:
+    def get_server_port(self) -> int:
         if self.web_server:
             return self.web_server.port
         else:
@@ -104,24 +101,21 @@ class Plugin:
     async def start_file_explorer(self: 'Plugin') -> dict[str, Any]:
         try:
             if not self.web_server:
-                self.web_server = WebServer(
-                    host="0.0.0.0",
-                    port=await self.get_server_port()
-                )
+                self.web_server = WebServer()
 
             if await self.web_server.is_running():
-                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), await self.get_server_port())).to_dict()
+                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), self.get_server_port())).to_dict()
             else:
                 await self.web_server.start()
-                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), await self.get_server_port())).to_dict()
+                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), self.get_server_port())).to_dict()
         except Exception as e:
             decky.logger.error(f"There was an error when trying to start the server: {e}")
-            return ApiResponse(ServerStatus(False, None, await self.get_server_port()), str(e)).to_dict()
+            return ApiResponse(ServerStatus(False, None, self.get_server_port()), str(e)).to_dict()
     
     async def stop_file_explorer(self: 'Plugin') -> dict[str, Any]: # type: ignore
         if self.web_server:
             await self.web_server.stop()
-        return ApiResponse(ServerStatus(False, None, await self.get_server_port())).to_dict()
+        return ApiResponse(ServerStatus(False, None, self.get_server_port())).to_dict()
     
     # ----------------------------
     # Access to settings files for the deckUI
@@ -162,10 +156,7 @@ class Plugin:
     # Asyncio-compatible long-running code, executed in a task when the plugin is loaded
     async def _main(self: 'Plugin'):
         decky.logger.info("Hello World!")
-        self.web_server = WebServer(
-            host="0.0.0.0",
-            port= await self.get_server_port()
-        )
+        self.web_server = WebServer()
 
     # Function called first during the unload process, utilize this to handle your plugin being removed
     async def _unload(self: 'Plugin'):

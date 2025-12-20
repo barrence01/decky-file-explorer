@@ -20,15 +20,13 @@ PLUGIN_DIR = Path(decky.DECKY_PLUGIN_DIR)
 BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
 WEBUI_DIR = PLUGIN_DIR / "defaults/py_modules/webui"
 AUTH_COOKIE = "auth_token"
+DEFAULT_PORT = 8082
 
 # Load user's settings
-settings_credentials = SettingsManager(name="credentials", settings_directory=SETTINGS_DIR)
-settings_credentials.read()
+from shared_settings import get_server_settings_manager, get_credentials_manager
 
-settings_server = SettingsManager(name="server_settings", settings_directory=SETTINGS_DIR)
-settings_server.read()
-
-HOME_DECK_DIR = settings_server.getSetting("base_dir") or os.path.expanduser("~")
+settings_credentials = get_credentials_manager()
+settings_server = get_server_settings_manager()
 
 # =========================
 # Exceptions
@@ -75,12 +73,34 @@ def check_credentials():
     if(password is None or password.strip() == ''):
         settings_credentials.setSetting("password_hash", hash_password("admin"))
 
+def check_server_settings():
+    if not settings_server.getSetting("base_dir"):
+        settings_server.setSetting("base_dir", os.path.expanduser("~"))
+    if not settings_server.getSetting("port"):
+        settings_server.setSetting("port", DEFAULT_PORT)
+
+def get_base_dir() -> str:
+    base_dir = settings_server.getSetting("base_dir")
+    if not base_dir:
+        base_dir = os.path.expanduser("~")
+        settings_server.setSetting("base_dir", base_dir)
+    decky.logger.info("Getting base_dir from settings: " + base_dir)
+    return base_dir
+
+def get_host_from_settings() -> str:
+    decky.logger.info("Getting host from settings: " + str(settings_server.getSetting("port") or DEFAULT_PORT))
+    return settings_server.getSetting("host") or "0.0.0.0"
+
+def get_port_from_settings() -> int:
+    decky.logger.info("Getting port from settings: " + str(settings_server.getSetting("port") or DEFAULT_PORT))
+    return settings_server.getSetting("port") or DEFAULT_PORT
+
 class WebServer:
     def __init__(
         self,
-        fs: FileSystemService = FileSystemService(settings_server.getSetting("base_dir") or os.path.expanduser("~")),
-        host="0.0.0.0",
-        port=settings_server.getSetting("port") or 8082
+        fs: FileSystemService = FileSystemService(get_base_dir()),
+        host=get_host_from_settings(),
+        port=get_port_from_settings()
     ):
         self.webui_dir = WEBUI_DIR
         self.fs = fs
@@ -188,12 +208,12 @@ class WebServer:
     async def list_dir(self, request):
         try:
             data = await request.json()
-            path = data.get("path", HOME_DECK_DIR)
+            path = data.get("path", get_base_dir())
         except Exception:
-            path = HOME_DECK_DIR
+            path = get_base_dir()
 
         if not path:
-            path = HOME_DECK_DIR
+            path = get_base_dir()
 
         try:
             selected_dir = self.fs.get_object(path)
@@ -493,7 +513,8 @@ class WebServer:
         try:
             self.runner = web.AppRunner(self.app)
             await self.runner.setup()
-
+            self.host = get_host_from_settings()
+            self.port = get_port_from_settings()
             self.site = web.TCPSite(
                 self.runner,
                 host=self.host,
@@ -515,7 +536,7 @@ class WebServer:
             self.site = None
         if self.runner:
             await self.runner.cleanup()
-            self.site = None
+            self.runner = None
 
     async def is_running(self) -> bool:
         return self.runner is not None and self.site is not None

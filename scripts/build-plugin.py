@@ -15,10 +15,6 @@ def build_plugin():
     parent_folder_name = current_dir.name
     print(f"Parent folder name: {parent_folder_name}")
     
-    # Create compiled directory
-    compiled_dir = Path("compiled")
-    compiled_dir.mkdir(exist_ok=True)
-    
     # Define zip file name
     zip_file_name = "decky-file-explorer.zip"
     zip_file_path = current_dir / zip_file_name
