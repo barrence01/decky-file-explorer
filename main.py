@@ -1,5 +1,4 @@
 import decky
-from settings import SettingsManager
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,6 +17,7 @@ import os
 import socket
 import hashlib
 import json
+from utils import log_exceptions 
 
 
 # Load user's settings
@@ -106,17 +106,26 @@ class Plugin:
     # ----------------------------
     # Access to the server for the deckUI
     # ----------------------------
+    @log_exceptions
+    async def check_plugin_health(self: 'Plugin') -> dict[str, Any]:
+        return ApiResponse().to_dict()
+    
+    @log_exceptions
     async def get_file_explorer_status(self: 'Plugin') -> dict[str, Any]:
         is_online = False
         if self.web_server:
             if await self.web_server.is_running():
                 is_online = True
         
-        if is_online:
-            return ApiResponse(ServerStatus(is_online, await self.web_server.get_ipv4(), self.web_server.port)).to_dict()
-        else:
-            return ApiResponse(ServerStatus(is_online, None, None)).to_dict()
+        try: 
+            if is_online:
+                return ApiResponse(ServerStatus(is_online, await self.web_server.get_ipv4(), self.web_server.port)).to_dict()
+        except OSError as e:
+            decky.logger.error(e)
         
+        return ApiResponse(ServerStatus(is_online, None, None)).to_dict()
+    
+    @log_exceptions
     async def start_file_explorer(self: 'Plugin') -> dict[str, Any]:
         try:
             if not self.web_server:
@@ -131,6 +140,7 @@ class Plugin:
             decky.logger.error(f"There was an error when trying to start the server: {e}")
             return ApiResponse(ServerStatus(False, None, self.get_server_port()), str(e)).to_dict()
     
+    @log_exceptions
     async def stop_file_explorer(self: 'Plugin') -> dict[str, Any]: # type: ignore
         if self.web_server:
             await self.web_server.stop()
@@ -139,14 +149,17 @@ class Plugin:
     # ----------------------------
     # Access to settings files for the deckUI
     # ----------------------------
+    @log_exceptions
     async def get_server_setting( self: 'Plugin', key: str ) -> dict[str, Any]:
         return ApiResponse(settings_server.getSetting( key )).to_dict() # type: ignore
     
+    @log_exceptions
     async def get_credential_setting( self: 'Plugin', key: str ) -> dict[str, Any]:
         if key is not None and "password" in key:
             raise IllegalKeyError("it was not possible to get the key value.")
         return ApiResponse(settings_server.getSetting( key )).to_dict() # type: ignore
     
+    @log_exceptions
     async def save_user_username( self: 'Plugin', value: str ) -> dict[str, Any]:
         decky.logger.info("Changing username settings")
         if value is None or value.strip() == "":
@@ -155,6 +168,7 @@ class Plugin:
         settings_credentials.setSetting( server.USERNAME_FIELD, value )
         return ApiResponse().to_dict()
     
+    @log_exceptions
     async def save_user_password( self: 'Plugin', value: str ) -> dict[str, Any]:
         decky.logger.info("Changing password settings")
         if value is None or value.strip() == "":
@@ -163,11 +177,13 @@ class Plugin:
         settings_credentials.setSetting( server.PASSWORD_FIELD, value )
         return ApiResponse().to_dict()
     
+    @log_exceptions
     async def save_server_settings( self: 'Plugin', key: str, value: Any ) -> dict[str, Any]:
         decky.logger.info("Changing settings - {}: {}".format( key, value ))
         settings_server.setSetting( key, value )
         return ApiResponse().to_dict()
 
+    @log_exceptions
     async def reset_settings(self: 'Plugin'):
         settings_credentials.setSetting("user_login", "admin")
         settings_credentials.setSetting("password_hash", self.hash_password("admin"))
@@ -177,10 +193,11 @@ class Plugin:
     # ----------------------------
     # Logging for the deckUI
     # ----------------------------
+    @log_exceptions
     async def logInfo( self, msg:str = "Javascript: no content" ):
         decky.logger.info(msg)
 
-
+    @log_exceptions
     async def logError( self, msg:str = "Javascript: no content" ):
         decky.logger.error(msg)
     # ----------------------------

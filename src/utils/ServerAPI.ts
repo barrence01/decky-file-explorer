@@ -14,6 +14,9 @@ export interface ApiResponse<T = any> {
 
 export class ServerAPIService {
 
+  // HealthCheck
+  private checkPluginHealth = callable<[], ApiResponse<ServerStatus>>("check_plugin_health");
+
   // Server methods
   private getFileExplorerStatus = callable<[], ApiResponse<ServerStatus>>("get_file_explorer_status");
   private startFileExplorer = callable<[], ApiResponse<ServerStatus>>("start_file_explorer");
@@ -41,6 +44,22 @@ export class ServerAPIService {
   constructor() {
     // Initialize port from settings
     this.getPortFromSettings().catch(console.error);
+  }
+
+  async getPluginHealth() {
+    try {
+      await this.checkPluginHealth();
+    } catch(error) {
+      console.log("An error has occurred while attempting to get plugin health:", error);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        await this.checkPluginHealth();
+      } catch(retryError) {
+        console.log("Plugin health check failed on retry:", retryError);
+        return false;
+      }
+    }
+    return true;
   }
 
   // Server operations
