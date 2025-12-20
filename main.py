@@ -11,12 +11,13 @@ LOG_DIR = Path(decky.DECKY_PLUGIN_LOG_DIR)
 
 sys.path.insert(0, str(BACKEND_DIR))
 
+import server
 from server import WebServer      
-from filesystem import FileSystemService
 
 import os
 import socket
 import hashlib
+import json
 
 
 # Load user's settings
@@ -24,6 +25,24 @@ from shared_settings import get_server_settings_manager, get_credentials_manager
 
 settings_credentials = get_credentials_manager()
 settings_server = get_server_settings_manager()
+
+
+# =========================
+# Exceptions
+# =========================
+
+class IllegalKeyError(Exception):
+    pass
+
+class InvalidPasswordFormatError(Exception):
+    pass
+
+class InvalidArgumentException(Exception):
+    pass
+
+# =========================
+# Responses
+# =========================
 
 class ServerStatus:
     def __init__(self, status:bool, ipv4_address, port: int | None):
@@ -58,7 +77,7 @@ class ApiResponse:
             return value.to_dict()
 
         # last-resort safety (prevents Decky crash)
-        return str(value)
+        return json.dumps(value)
 
     def to_dict(self) -> dict:
         return {
@@ -71,7 +90,7 @@ class Plugin:
     def __init__(self):
         self.web_server = None
         
-    async def get_server_port(self) -> int:
+    def get_server_port(self) -> int:
         if self.web_server:
             return self.web_server.port
         else:
@@ -104,18 +123,18 @@ class Plugin:
                 self.web_server = WebServer()
 
             if await self.web_server.is_running():
-                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), await self.get_server_port())).to_dict()
+                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), self.get_server_port())).to_dict()
             else:
                 await self.web_server.start()
-                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), await self.get_server_port())).to_dict()
+                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), self.get_server_port())).to_dict()
         except Exception as e:
             decky.logger.error(f"There was an error when trying to start the server: {e}")
-            return ApiResponse(ServerStatus(False, None, await self.get_server_port()), str(e)).to_dict()
+            return ApiResponse(ServerStatus(False, None, self.get_server_port()), str(e)).to_dict()
     
     async def stop_file_explorer(self: 'Plugin') -> dict[str, Any]: # type: ignore
         if self.web_server:
             await self.web_server.stop()
-        return ApiResponse(ServerStatus(False, None, await self.get_server_port())).to_dict()
+        return ApiResponse(ServerStatus(False, None, self.get_server_port())).to_dict()
     
     # ----------------------------
     # Access to settings files for the deckUI
@@ -124,14 +143,27 @@ class Plugin:
         return ApiResponse(settings_server.getSetting( key )).to_dict() # type: ignore
     
     async def get_credential_setting( self: 'Plugin', key: str ) -> dict[str, Any]:
+        if key is not None and "password" in key:
+            raise IllegalKeyError("it was not possible to get the key value.")
         return ApiResponse(settings_server.getSetting( key )).to_dict() # type: ignore
     
-    async def save_user_settings( self: 'Plugin', key: str, value ) -> dict[str, Any]:
-        decky.logger.info("Changing settings - {}: {}".format( key, value ))
-        settings_credentials.setSetting( key, value )
+    async def save_user_username( self: 'Plugin', value: str ) -> dict[str, Any]:
+        decky.logger.info("Changing username settings")
+        if value is None or value.strip() == "":
+            raise InvalidArgumentException("The password can't be blank")
+        
+        settings_credentials.setSetting( server.USERNAME_FIELD, value )
         return ApiResponse().to_dict()
     
-    async def save_server_settings( self: 'Plugin', key: str, value ) -> dict[str, Any]:
+    async def save_user_password( self: 'Plugin', value: str ) -> dict[str, Any]:
+        decky.logger.info("Changing password settings")
+        if value is None or value.strip() == "":
+            raise InvalidPasswordFormatError("The password can't be blank")
+        value = server.hash_password(value)
+        settings_credentials.setSetting( server.PASSWORD_FIELD, value )
+        return ApiResponse().to_dict()
+    
+    async def save_server_settings( self: 'Plugin', key: str, value: Any ) -> dict[str, Any]:
         decky.logger.info("Changing settings - {}: {}".format( key, value ))
         settings_server.setSetting( key, value )
         return ApiResponse().to_dict()

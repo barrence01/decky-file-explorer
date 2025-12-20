@@ -6,6 +6,23 @@ import shutil
 import sys
 from pathlib import Path
 import zipfile
+import subprocess
+
+def run_pnpm_build(path):
+    print(f"pnpm path: {path}")
+    if path and path != Path('/'):
+        result = subprocess.run(
+            ["pnpm", "build"],
+            cwd=path, 
+            check=True
+        )
+        print("STDOUT:")
+        print(result.stdout)
+
+        print("STDERR:")
+        print(result.stderr)
+        if result.returncode != 0:
+            raise RuntimeError("pnpm build failed")
 
 def build_plugin():
     print("=== Plugin Build Script ===")
@@ -14,6 +31,9 @@ def build_plugin():
     current_dir = Path.cwd()
     parent_folder_name = current_dir.name
     print(f"Parent folder name: {parent_folder_name}")
+
+    # Build deckyUI
+    run_pnpm_build(current_dir)
     
     # Define zip file name
     zip_file_name = "decky-file-explorer.zip"
