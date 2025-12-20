@@ -8,9 +8,29 @@ from pathlib import Path
 import zipfile
 import subprocess
 
-def run_pnpm_build(path):
+def run_pnpm_install(path: Path):
     print(f"pnpm path: {path}")
     if path and path != Path('/'):
+        result = subprocess.run(
+            ["pnpm", "install"],
+            cwd=path, 
+            check=True
+        )
+        print("STDOUT:")
+        print(result.stdout)
+
+        print("STDERR:")
+        print(result.stderr)
+        if result.returncode != 0:
+            raise RuntimeError("pnpm install failed")
+        
+def run_pnpm_build(path: Path):
+    print(f"pnpm path: {path}")
+    if path and path != Path('/'):
+        if not (path / "node_modules").exists():
+            print("node_modules folder not found. Running 'pnpm install'")
+            run_pnpm_install(path)
+
         result = subprocess.run(
             ["pnpm", "build"],
             cwd=path, 
