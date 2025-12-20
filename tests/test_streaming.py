@@ -1,6 +1,5 @@
 import pytest
-from backend.filesystem import FileAlreadyExistsError
-
+from filesystem import FileAlreadyExistsError
 
 def test_stream_read_and_write(fs):
     data = b"x" * (1024 * 1024)

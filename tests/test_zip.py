@@ -1,6 +1,5 @@
 import zipfile
 
-
 def test_stream_zip_single_file(fs):
     fs.create_file("a.txt", b"zipme")
 

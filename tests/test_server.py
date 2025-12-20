@@ -4,9 +4,8 @@ from pathlib import Path
 from aiohttp import FormData
 from aiohttp.test_utils import TestClient
 
-from backend.filesystem import FileSystemService
-from backend.server import WebServer, AUTH_COOKIE
-
+from filesystem import FileSystemService
+from server import WebServer, AUTH_COOKIE
 
 # ------------------------
 # FIXTURES
@@ -30,7 +29,7 @@ async def client(aiohttp_client, fs, tmp_path, monkeypatch):
     (webui / "index.html").write_text("<html>OK</html>")
 
     monkeypatch.setattr(
-        "backend.server.WEBUI_DIR",
+        "server.WEBUI_DIR",
         webui
     )
 

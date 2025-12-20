@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-FILES_LIST="dist bin LICENSE main.py package.json plugin.json README.md"
+FILES_LIST="dist bin defaults LICENSE main.py package.json plugin.json README.md"
 DECK_IP="192.168.0.101"
 HOMEBREW_DIR="/home/deck/homebrew"
 

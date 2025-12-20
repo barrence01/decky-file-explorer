@@ -1,9 +1,9 @@
 {
     "python.analysis.extraPaths": [
-        "./backend"
+        "./defaults/py_modules"
     ],
     "python.testing.pytestArgs": [
-        "backend/tests"
+        "tests"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,

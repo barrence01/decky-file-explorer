@@ -1,6 +1,5 @@
 import pytest
-from backend.filesystem import FileAlreadyExistsError
-
+from filesystem import FileAlreadyExistsError
 
 def test_create_and_delete_file(fs):
     fs.create_file("a/b/file.bin", b"123")

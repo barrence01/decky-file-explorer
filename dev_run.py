@@ -5,7 +5,7 @@ from pathlib import Path
 
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
 SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
-BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "backend"
+BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
 LOG_DIR = Path(decky.DECKY_PLUGIN_LOG_DIR)
 sys.path.insert(0, str(BACKEND_DIR))
 

@@ -1,6 +1,5 @@
 import pytest
 
-
 def test_file_object_properties(fs):
     fs.create_file("test.txt", b"content")
     obj = fs.get_object("test.txt")
