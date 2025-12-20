@@ -21,13 +21,14 @@ def build_plugin():
     
     # Define zip file name
     zip_file_name = "decky-file-explorer.zip"
-    zip_file_path = compiled_dir / zip_file_name
+    zip_file_path = current_dir / zip_file_name
     
     # Remove existing zip if it exists
     if zip_file_path.exists():
         print(f"Removing existing {zip_file_name}...")
         zip_file_path.unlink()
     
+    print(zip_file_path)
     print(f"Creating {zip_file_name}...")
     
     # Create zip file
@@ -77,7 +78,7 @@ def build_plugin():
     
     with zipfile.ZipFile(zip_file_path, 'r') as zipf:
         file_count = len(zipf.namelist())
-        total_size = sum(z.info.file_size for z in zipf.infolist()) # type: ignore
+        total_size = sum(z.file_size for z in zipf.infolist()) # type: ignore
     
     # Create summary
     print("\n=== Build Summary ===")

@@ -1,5 +1,8 @@
-pip install pytest
+# To run plugin
 pip install aiohttp
+
+# To run tests
+pip install pytest
 pip install pytest pytest-aiohttp aiohttp
 pip install pytest-cov
 pip install pytest-asyncio
