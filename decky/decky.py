@@ -12,7 +12,7 @@ from datetime import datetime
 # ----------------------------
 
 # Mimic Decky's settings directory
-SETTINGS_DIR = Path("./.decky_settings")
+SETTINGS_DIR = Path("./.deckyloader-mock-env/.decky_settings")
 SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
 DECKY_PLUGIN_SETTINGS_DIR = str(SETTINGS_DIR)
 
@@ -20,11 +20,11 @@ PLUGIN_DIR = Path(os.path.dirname(os.path.abspath(__main__.__file__)))
 PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
 DECKY_PLUGIN_DIR = str(PLUGIN_DIR)
 
-RUNTIME_DIR = Path("./.decky_plugin_runtime")
+RUNTIME_DIR = Path("./.deckyloader-mock-env/.decky_plugin_runtime")
 RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 DECKY_PLUGIN_RUNTIME_DIR = str(RUNTIME_DIR)
 
-LOG_DIR = Path("./.decky_log")
+LOG_DIR = Path("./.deckyloader-mock-env/.decky_log")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 DECKY_PLUGIN_LOG_DIR = str(LOG_DIR)
 
