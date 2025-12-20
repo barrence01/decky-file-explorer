@@ -1,0 +1,50 @@
+[project]
+name = "decky-file-explorer"
+version = "1.0.0"
+authors = [
+  { name = "Will B.", email = "barrence.santos@gmail.com" },
+]
+description = "A file explorer plugin for Decky Loader"
+readme = "README.md"
+requires-python = ">=3.7"
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Utilities",
+    "Topic :: Desktop Environment",
+]
+keywords = ["decky", "plugin", "file-explorer", "steam-deck"]
+dependencies = [
+    "aiohttp == 3.13.2",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.urls]
+Homepage = "https://github.com/barrence01/decky-file-explorer"
+Repository = "https://github.com/barrence01/decky-file-explorer.git"
+Issues = "https://github.com/barrence01/decky-file-explorer/issues"
+"Changelog" = "https://github.com/barrence01/decky-file-explorer/releases"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["defaults","py_modules"]
+include = ["decky_file_explorer*"] 
+
+[tool.setuptools.package-data]
+"decky_file_explorer" = [
+    "*.json",
+    "*.py",
+    "*.css",
+    "*.js",
+    "*.html",
+    "*.png",
+    "*.svg",
+    "*.ico",
+]

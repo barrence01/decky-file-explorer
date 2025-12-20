@@ -1,6 +1,5 @@
 import pytest
-from backend.filesystem import FileSystemError
-
+from filesystem import FileSystemError
 
 @pytest.mark.parametrize("path", [
     "../",

@@ -17,8 +17,8 @@ from settings import SettingsManager
 
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
 PLUGIN_DIR = Path(decky.DECKY_PLUGIN_DIR)
-BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "backend"
-WEBUI_DIR = PLUGIN_DIR / "backend/webui"
+BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
+WEBUI_DIR = PLUGIN_DIR / "defaults/py_modules/webui"
 AUTH_COOKIE = "auth_token"
 
 # Load user's settings

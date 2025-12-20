@@ -6,7 +6,7 @@ from typing import Any
 
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
 SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
-BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "backend"
+BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
 LOG_DIR = Path(decky.DECKY_PLUGIN_LOG_DIR)
 
 sys.path.insert(0, str(BACKEND_DIR))
@@ -74,7 +74,7 @@ class Plugin:
     def __init__(self):
         self.web_server = None
         
-    def get_server_port(self) -> int:
+    async def get_server_port(self) -> int:
         if self.web_server:
             return self.web_server.port
         else:
@@ -106,22 +106,22 @@ class Plugin:
             if not self.web_server:
                 self.web_server = WebServer(
                     host="0.0.0.0",
-                    port=self.get_server_port()
+                    port=await self.get_server_port()
                 )
 
             if await self.web_server.is_running():
-                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), self.get_server_port())).to_dict()
+                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), await self.get_server_port())).to_dict()
             else:
                 await self.web_server.start()
-                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), self.get_server_port())).to_dict()
+                return ApiResponse(ServerStatus(True, await self.web_server.get_ipv4(), await self.get_server_port())).to_dict()
         except Exception as e:
             decky.logger.error(f"There was an error when trying to start the server: {e}")
-            return ApiResponse(ServerStatus(False, None, self.get_server_port()), str(e)).to_dict()
+            return ApiResponse(ServerStatus(False, None, await self.get_server_port()), str(e)).to_dict()
     
     async def stop_file_explorer(self: 'Plugin') -> dict[str, Any]: # type: ignore
         if self.web_server:
             await self.web_server.stop()
-        return ApiResponse(ServerStatus(False, None, self.get_server_port())).to_dict()
+        return ApiResponse(ServerStatus(False, None, await self.get_server_port())).to_dict()
     
     # ----------------------------
     # Access to settings files for the deckUI
@@ -164,7 +164,7 @@ class Plugin:
         decky.logger.info("Hello World!")
         self.web_server = WebServer(
             host="0.0.0.0",
-            port=self.get_server_port()
+            port= await self.get_server_port()
         )
 
     # Function called first during the unload process, utilize this to handle your plugin being removed

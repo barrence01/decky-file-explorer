@@ -214,3 +214,9 @@ Thumbs.db
 # Extra
 # =========================
 credentials.json
+.decky_log
+.decky_plugin
+.decky_settings
+.decky_plugin_runtime
+compiled
+.deckyloader-mock-env
