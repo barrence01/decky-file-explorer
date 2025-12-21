@@ -14,6 +14,9 @@ export interface ApiResponse<T = any> {
 
 export class ServerAPIService {
 
+  // HealthCheck
+  private checkPluginHealth = callable<[], ApiResponse<ServerStatus>>("check_plugin_health");
+
   // Server methods
   private getFileExplorerStatus = callable<[], ApiResponse<ServerStatus>>("get_file_explorer_status");
   private startFileExplorer = callable<[], ApiResponse<ServerStatus>>("start_file_explorer");
@@ -25,6 +28,8 @@ export class ServerAPIService {
   private saveServerUsername = callable<[value: string], ApiResponse>("save_user_username");
   private saveServerUserPassword = callable<[value: string], ApiResponse>("save_user_password");
   private saveServerSettings = callable<[key: string, value: any], ApiResponse>("save_server_settings");
+  private saveTimeoutSettings = callable<[value: number], ApiResponse>("save_timeout_settings");
+  private getTimeoutSettings = callable<[], ApiResponse>("get_timeout_settings");
   private resetSettings = callable<[], void>("reset_settings"); 
   
   // Logging methods
@@ -37,10 +42,27 @@ export class ServerAPIService {
   private ipv4Address: string = "";
 
   private DEFAULT_SERVER_PORT: number = 8082;
+  private DEFAULT_TIMEOUT: number = 600;
 
   constructor() {
     // Initialize port from settings
     this.getPortFromSettings().catch(console.error);
+  }
+
+  async getPluginHealth() {
+    try {
+      await this.checkPluginHealth();
+    } catch(error) {
+      console.log("An error has occurred while attempting to get plugin health:", error);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        await this.checkPluginHealth();
+      } catch(retryError) {
+        console.log("Plugin health check failed on retry:", retryError);
+        return false;
+      }
+    }
+    return true;
   }
 
   // Server operations
@@ -126,6 +148,20 @@ export class ServerAPIService {
   async savePassword(value: any): Promise<boolean> {
     const response = await this.saveServerUserPassword(value);
     return response.success;
+  }
+
+  async setTimeoutSettings(value: number) {
+    const response = await this.saveTimeoutSettings(value);
+    return response.success;
+  }
+
+  async getTimeoutFromSettings() {
+    const response = await this.getTimeoutSettings();
+    if (response && response.success) {
+      return response.data;
+    }
+
+    return this.DEFAULT_TIMEOUT;
   }
 
   async resetAllSettings(): Promise<void> {

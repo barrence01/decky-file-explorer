@@ -19,16 +19,18 @@ const Content: React.FC = () => {
 
 
   useEffect(() => {
-    fetchServerStatus();
-    fetchSettings();
+      fetchServerStatus();
+      fetchSettings();
   }, []);
 
   const fetchServerStatus = async () => {
+    let status = null;
     try {
       const status = await api.getServerStatus();
       setServerStatus(status);
     } catch (error) {
       await api.error(`Failed to fetch server status: ${error}`);
+      await api.error(`Python return: ${status}`);
     }
   };
 

@@ -30,12 +30,14 @@ BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
 WEBUI_DIR = PLUGIN_DIR / "defaults/py_modules/webui"
 AUTH_COOKIE = "auth_token"
 DEFAULT_PORT = 8082
+DEFAULT_TIMEOUT_IN_SECONDS = 600 # 600s or 10m
 PASSWORD_FIELD = "password_hash"
 USERNAME_FIELD = "user_login"
 BASE_DIR_FIELD = "base_dir"
 PORT_FIELD = "port"
 HOST_FIELD = "host"
 AUTH_TOKEN_FIELD = "auth_tokens"
+DEFAULT_TIMEOUT_FIELD = "shutdown_timeout_seconds"
 
 # =========================
 # Exceptions
@@ -46,8 +48,23 @@ class PortAlreadyInUseError(Exception):
 
 
 # =========================
-# Support methods
+# Middleware
 # =========================
+
+@web.middleware
+async def activity_middleware(request, handler):
+    app = request.app
+    server: "WebServer" = app["server"]
+
+    server._active_requests += 1
+    server._last_activity = asyncio.get_running_loop().time()
+
+    try:
+        return await handler(request)
+    finally:
+        server._active_requests -= 1
+        server._last_activity = asyncio.get_running_loop().time()
+
 
 @web.middleware
 async def auth_middleware(request, handler):
@@ -70,6 +87,10 @@ async def auth_middleware(request, handler):
         )
 
     return await handler(request)
+
+# =========================
+# Util methods
+# =========================
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
@@ -104,6 +125,18 @@ def get_port_from_settings() -> int:
     decky.logger.info("Getting port from settings: " + str(settings_server.getSetting(PORT_FIELD) or DEFAULT_PORT))
     return settings_server.getSetting(PORT_FIELD) or DEFAULT_PORT
 
+def get_time_to_shutdown_timeout() -> int:
+    """
+    Returns inactivity timeout in seconds.
+    Can be changed dynamically via settings.
+    """
+    timeout = int(settings_server.getSetting(DEFAULT_TIMEOUT_FIELD) or 0)
+    if not timeout:
+        timeout = DEFAULT_TIMEOUT_IN_SECONDS
+        settings_server.setSetting(DEFAULT_TIMEOUT_FIELD, timeout)
+    return timeout
+
+
 class WebServer:
     def __init__(
         self,
@@ -117,14 +150,19 @@ class WebServer:
         self.host = host
         self.port = port
 
-        self.app = web.Application(middlewares=[auth_middleware])
+        self.app = web.Application(middlewares=[activity_middleware, auth_middleware])
+        self.app["server"] = self
         self.app[AUTH_TOKEN_FIELD] = set()
 
         self.runner = None
         self.site = None
 
-        check_credentials()
+        # Inactivity check
+        self._last_activity = asyncio.get_running_loop().time()
+        self._active_requests = 0
+        self._shutdown_task: asyncio.Task | None = None
 
+        check_credentials()
         self._setup_routes()
         self._setup_static()
 
@@ -485,7 +523,7 @@ class WebServer:
 
                 await response.write_eof()
             except (ClientConnectionResetError, asyncio.CancelledError):
-                decky.logger.debug("Client disconnected during file streaming")
+                decky.logger.info("Client disconnected during file streaming")
             
             return response
 
@@ -508,7 +546,7 @@ class WebServer:
 
             await response.write_eof()
         except (ClientConnectionResetError, asyncio.CancelledError):
-            decky.logger.debug("Client disconnected during fallback streaming")
+            decky.logger.info("Client disconnected during fallback streaming")
 
         return response
 
@@ -529,13 +567,22 @@ class WebServer:
                 host=self.host,
                 port=self.port
             )
+
             await self.site.start()
+
+            # RESET inactivity timer ON START
+            self._last_activity = asyncio.get_running_loop().time()
+
+            if not self._shutdown_task or self._shutdown_task.done():
+                self._shutdown_task = asyncio.create_task(
+                    self._inactivity_watcher()
+                )
         except OSError as e:
             if e.errno == 98:
                 decky.logger.error(f"Port {self.port} is already in use")
                 raise PortAlreadyInUseError(f"Port {self.port} is already in use")
             else:
-                decky.logger.error(f"An unknown error has occured while starting the webUI server.", e)
+                decky.logger.exception(f"An unknown error has occured while starting the webUI server.")
                 raise
 
     async def stop(self):
@@ -546,6 +593,10 @@ class WebServer:
         if self.runner:
             await self.runner.cleanup()
             self.runner = None
+        if self._shutdown_task:
+            self._shutdown_task.cancel()
+            self._shutdown_task = None
+
 
     async def is_running(self) -> bool:
         return self.runner is not None and self.site is not None
@@ -557,3 +608,25 @@ class WebServer:
             return s.getsockname()[0]
         finally:
             s.close()
+
+    async def _inactivity_watcher(self):
+        loop = asyncio.get_running_loop()
+
+        try:
+            while True:
+                await asyncio.sleep(5)
+
+                timeout = get_time_to_shutdown_timeout()
+                now = loop.time()
+
+                inactive_for = now - self._last_activity
+
+                if (inactive_for >= timeout and self._active_requests == 0):
+                    decky.logger.info(f"Server inactive for {int(inactive_for)} seconds, shutting down")
+                    await self.stop()
+                    break
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            decky.logger.exception("Inactivity watcher crashed")
+
