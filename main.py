@@ -121,7 +121,9 @@ class Plugin:
             if is_online:
                 return ApiResponse(ServerStatus(is_online, await self.web_server.get_ipv4(), self.web_server.port)).to_dict()
         except OSError as e:
-            decky.logger.error(e)
+            decky.logger.exception(f"Couldn't get server status: {str(e)}")
+            await self.stop_file_explorer()
+            is_online = False
         
         return ApiResponse(ServerStatus(is_online, None, None)).to_dict()
     
@@ -178,6 +180,19 @@ class Plugin:
         return ApiResponse().to_dict()
     
     @log_exceptions
+    async def save_timeout_settings( self: 'Plugin', value: int ) -> dict[str, Any]:
+        decky.logger.info(f"Changing timeout settings to {value}")
+        if value is None:
+            value = server.DEFAULT_TIMEOUT_IN_SECONDS
+            decky.logger.info(f"Invalid value for timeout, using the default value of {server.DEFAULT_TIMEOUT_IN_SECONDS}")
+        settings_server.setSetting( server.DEFAULT_TIMEOUT_FIELD, value )
+        return ApiResponse().to_dict()
+    
+    @log_exceptions
+    async def get_timeout_settings( self: 'Plugin' ) -> dict[str, Any]:
+        return ApiResponse(settings_server.getSetting(server.DEFAULT_TIMEOUT_FIELD) or server.DEFAULT_TIMEOUT_IN_SECONDS).to_dict()
+    
+    @log_exceptions
     async def save_server_settings( self: 'Plugin', key: str, value: Any ) -> dict[str, Any]:
         decky.logger.info("Changing settings - {}: {}".format( key, value ))
         settings_server.setSetting( key, value )
@@ -189,6 +204,7 @@ class Plugin:
         settings_credentials.setSetting("password_hash", self.hash_password("admin"))
         settings_server.setSetting("port",8082)
         settings_server.setSetting("base_dir",os.path.expanduser("~"))
+        settings_server.setSetting( server.DEFAULT_TIMEOUT_FIELD, server.DEFAULT_TIMEOUT_IN_SECONDS )
         
     # ----------------------------
     # Logging for the deckUI

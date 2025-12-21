@@ -24,7 +24,6 @@ const HIGHLIGHT_FOLDERS = [
 ].map(n => n.toLowerCase());
 
 
-
 document.addEventListener("DOMContentLoaded", () => {
   const hamburger = document.querySelector(".hamburger");
   const sidePanel = document.getElementById("sidePanel");
@@ -37,32 +36,58 @@ document.addEventListener("DOMContentLoaded", () => {
   passwordEnterEvent();
 });
 
+function showLoading() {
+  document.body.classList.add("loading");
+  document.getElementById("loadingOverlay").classList.remove("hidden");
+}
 
-/* ---------- AUTH ---------- */
-async function checkLogin() {
-  const res = await fetch("/api/login/is-logged");
+function hideLoading() {
+  document.body.classList.remove("loading");
+  document.getElementById("loadingOverlay").classList.add("hidden");
+}
 
-  if (res.ok) {
-    showFileView();
-  } else {
-    document.getElementById("loginView").style.display = "flex";
+async function withLoading(callback) {
+  showLoading();
+  try {
+    return await callback();
+  } finally {
+    hideLoading();
   }
 }
 
-async function doLogin() {
-  const login = document.getElementById("login").value;
-  const password = document.getElementById("password").value;
 
-  const res = await fetch("api/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ login, password }),
+/* ---------- AUTH ---------- */
+async function checkLogin() {
+  return withLoading(async () => {
+    const res = await fetch("/api/login/is-logged");
+
+    if (res.ok) {
+      document.getElementById("logoffBtn").style.display = "block";
+      showFileView();
+    } else {
+      document.getElementById("logoffBtn").style.display = "none";
+      document.getElementById("loginView").style.display = "flex";
+    }
   });
+}
 
-  if(!res.ok) {
-    showError("Check your credentials and try again.");
-  }
-  checkLogin();
+
+async function doLogin() {
+  return withLoading(async () => {
+    const login = document.getElementById("login").value;
+    const password = document.getElementById("password").value;
+
+    const res = await fetch("api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login, password }),
+    });
+
+    if(!res.ok) {
+      showError("Check your credentials and try again.");
+    }
+    checkLogin();
+  });
 }
 
 async function doLogoff() {
@@ -79,9 +104,10 @@ async function doLogoff() {
   clipboardMode = null;
   currentPath = null;
 
-  // Hide file view, show login
+  // Hide file view, show login, logoff
   document.getElementById("fileView").style.display = "none";
   document.getElementById("loginView").style.display = "flex";
+  document.getElementById("logoffBtn").style.display = "none";
 
   // Hide hamburger menu
   const hamburger = document.querySelector(".hamburger");
@@ -118,23 +144,25 @@ function showFileView() {
 }
 
 async function loadDir(path = null) {
-  selectedItems = [];
+  return withLoading(async () => {
+    selectedItems = [];
 
-  const res = await fetch("/api/dir/list", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path }),
+    const res = await fetch("/api/dir/list", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+
+    const data = await res.json();
+
+    selectedDir = data.selectedDir;
+    currentPath = data.selectedDir.path;
+
+    document.getElementById("breadcrumb").innerText = currentPath;
+
+    updateToolbar();
+    renderFiles(data.dirContent);
   });
-
-  const data = await res.json();
-
-  selectedDir = data.selectedDir;
-  currentPath = data.selectedDir.path;
-
-  document.getElementById("breadcrumb").innerText = currentPath;
-
-  updateToolbar();
-  renderFiles(data.dirContent);
 }
 
 function renderFiles(files) {
@@ -251,6 +279,14 @@ function updateToolbar() {
     )
   );
 
+  bar.appendChild(
+    toolbarButton(
+      "Refresh",
+      "fas fa-rotate-right",
+      () => loadDir(currentPath)
+    )
+  );
+
   // ---- COPY / MOVE ----
   if (clipboardItems.length > 0) {
     bar.appendChild(
@@ -354,6 +390,7 @@ function toolbarButton(label, iconClass, onClick, disabled = false) {
     icon.style.paddingRight = "2px";
     btn.appendChild(icon);
   }
+  btn.classList.add("btn-interactive")
 
   const span = document.createElement("span");
   span.innerText = label;
@@ -370,22 +407,24 @@ async function deleteSelected() {
 
   if (!confirm(`Delete ${selectedItems.length} item(s)?`)) return;
 
-  const paths = selectedItems.map((i) => i.path);
+  return withLoading(async () => {
+    const paths = selectedItems.map((i) => i.path);
 
-  const res = await fetch("/api/dir/delete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ paths })
+    const res = await fetch("/api/dir/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      showError(data.error || "Delete failed");
+      return;
+    }
+
+    loadDir(currentPath);
   });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    showError(data.error || "Delete failed");
-    return;
-  }
-
-  loadDir(currentPath);
 }
 
 async function renameSelected() {

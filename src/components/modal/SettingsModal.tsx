@@ -24,6 +24,8 @@ const SettingsModal: FunctionComponent<{
   const [invalidPortError, setInvalidPortError] = useState(false);
   const [invalidUsernameError, setInvalidUsernameError] = useState(false);
   const [invalidPasswordError, setInvalidPasswordError] = useState(false);
+  const [invalidBaseDirError, setInvalidBaseDirError] = useState(false);
+  const [invalidTimeoutError, setInvalidTimeoutError] = useState(false);
   const [portErrorMessage, setPortErrorMessage] = useState("");
   const [portSuccessMessage, setPortSuccessMessage] = useState("");
   const [portSaved, setPortSaved] = useState(false);
@@ -33,6 +35,10 @@ const SettingsModal: FunctionComponent<{
   const [baseDirErrorMessage, setBaseDirErrorMessage] = useState("");
   const [baseDirSuccessMessage, setBaseDirSuccessMessage] = useState("");
   const [baseDirSaved, setBaseDirSaved] = useState(false);
+  const [shutdownTimeout, setShutdownTimeout] = useState<number>(600);
+  const [timeoutErrorMessage, setTimeoutErrorMessage] = useState("");
+  const [timeoutSuccessMessage, setTimeoutSuccessMessage] = useState("");
+  const [timeoutSaved, setTimeoutSaved] = useState(false);
 
   const handleSavePort = useCallback(async () => {
     if (!port) {
@@ -41,18 +47,20 @@ const SettingsModal: FunctionComponent<{
       return;
     }
 
-    setIsSaving(true);
     if (!invalidPortError) {
-      const success = await api.saveSetting("port", +port);
-      if (success) {
-        showSuccess("port", "Port number saved successfully.");
-        onSettingsSaved?.();
-      } else {
-        showError("port", "Failed to save port number.");
-      }
+      return;
+    }
+
+    setIsSaving(true);
+    const success = await api.saveSetting("port", +port);
+    if (success) {
+      showSuccess("port", "Port number saved successfully.");
+      onSettingsSaved?.();
+    } else {
+      showError("port", "Failed to save port number.");
     }
     
-    setIsSaving(false);
+    setIsSaving(false); 
   }, [port, invalidPortError]);
 
   const handleSaveUsernamePassword = useCallback(async () => {
@@ -71,38 +79,38 @@ const SettingsModal: FunctionComponent<{
     if (!username || !password) {
       return;
     }
+    if (!invalidUsernameError && !invalidPasswordError) {
+      return;
+    }
 
     setIsSaving(true);
-    if (!invalidUsernameError && !invalidPasswordError) {
+    const usernameSuccess = await api.saveUsername(username);
+    const passwordSuccess = await api.savePassword(password);
 
-      const usernameSuccess = await api.saveUsername(username);
-      const passwordSuccess = await api.savePassword(password);
-
-      if (usernameSuccess && passwordSuccess) {
-        showSuccess("usernameAndPassword", "Credentials changed successfully.");
-        onSettingsSaved?.();
-      } else {
-        showError("usernameAndPassword", "Could not save credentials.");
-      }
+    if (usernameSuccess && passwordSuccess) {
+      showSuccess("usernameAndPassword", "Credentials changed successfully.");
+      onSettingsSaved?.();
+    } else {
+      showError("usernameAndPassword", "Could not save credentials.");
     }
-    
     setIsSaving(false);
   }, [username, password, invalidUsernameError, invalidPasswordError]);
 
   const handleSaveBaseDir = useCallback(async () => {
+    if (invalidBaseDirError) return;
+
     setIsSaving(true);
 
     const success = await api.saveSetting("base_dir", baseDir);
     if (success) {
-      api.info("Base directory saved successfully.");
       showSuccess("baseDir", "Base directory saved successfully.");
       onSettingsSaved?.();
     } else {
-      api.error("Failed to save base directory.");
       showError("baseDir", "Failed to save base directory.");
     }
+
     setIsSaving(false);
-  }, [baseDir]);
+  }, [baseDir, invalidBaseDirError]);
 
   const handlePortChange = (e: any) => {
     const value = e.target.value;
@@ -193,7 +201,22 @@ const SettingsModal: FunctionComponent<{
   };
 
   const handleBaseDirChange = (e: any) => {
-    setBaseDir(e.target.value);
+    const value = e.target.value;
+    setBaseDir(value);
+    showError("baseDir", "");
+    setInvalidBaseDirError(true);
+
+    if (!value) {
+      showError("baseDir", "Base directory cannot be empty.");
+      return;
+    }
+
+    if (!value.startsWith("/")) {
+      showError("baseDir", "Base directory must be an absolute path.");
+      return;
+    }
+
+    setInvalidBaseDirError(false);
   };
 
   const showError = (field: string, message: string) => {
@@ -209,6 +232,10 @@ const SettingsModal: FunctionComponent<{
       case "baseDir":
         setBaseDirSuccessMessage("");
         setBaseDirErrorMessage(message);
+        break;
+      case "Timeout":
+        setTimeoutSuccessMessage("");
+        setTimeoutErrorMessage(message);
         break;
       default:
         break;
@@ -238,6 +265,13 @@ const SettingsModal: FunctionComponent<{
         setTimeoutClearMessage(setBaseDirSuccessMessage);
         setTimeoutClearSaved(setBaseDirSaved);
         break;
+      case "Timeout":
+        setTimeoutErrorMessage("");
+        setTimeoutSuccessMessage(message);
+        setTimeoutSaved(true);
+        setTimeoutClearMessage(setTimeoutSuccessMessage);
+        setTimeoutClearSaved(setTimeoutSaved);
+        break;
       default:
         break;
     }
@@ -261,6 +295,8 @@ const SettingsModal: FunctionComponent<{
       setUsername(_username);
       const _baseDir = await api.getBaseDir();
       setBaseDir(_baseDir);
+      const _timeout = await api.getTimeoutFromSettings();
+      setShutdownTimeout(_timeout);
     };
 
     loadDefaults();  
@@ -275,6 +311,56 @@ const SettingsModal: FunctionComponent<{
     setBaseDir(_baseDir);
     onSettingsSaved?.();
   }, [initialPort]);
+
+  const handleTimeoutChange = (e: any) => {
+    const value = e.target.value;
+    setShutdownTimeout(value);
+    showError("Timeout", "");
+    setInvalidTimeoutError(true);
+    setTimeoutSaved(false);
+
+    if (!value) {
+      showError("Timeout", "Timeout cannot be empty.");
+      return;
+    }
+
+    if (isNaN(+value)) {
+      showError("Timeout", "Timeout must be a number.");
+      return;
+    }
+
+    const seconds = +value;
+
+    if (seconds < 15) {
+      showError("Timeout", "Minimum timeout is 15 seconds.");
+      return;
+    }
+
+    if (seconds > 86400) {
+      showError("Timeout", "Maximum timeout is 86400 seconds (24h).");
+      return;
+    }
+
+    setInvalidTimeoutError(false);
+  };
+
+  const handleSaveTimeout = useCallback(async () => {
+    if (invalidTimeoutError) {
+      return;
+    };
+
+    setIsSaving(true);
+    const success = await api.setTimeoutSettings(shutdownTimeout);
+    if (success) {
+      showSuccess("Timeout", "Shutdown timeout saved successfully.");
+      onSettingsSaved?.();
+    } else {
+      showError("Timeout", "Failed to save shutdown timeout.");
+    }
+
+    setIsSaving(false);
+  }, [shutdownTimeout, invalidTimeoutError]);
+
 
   return (
     <ModalRoot closeModal={closeModal}>
@@ -376,6 +462,33 @@ const SettingsModal: FunctionComponent<{
           onClick={handleSaveBaseDir} 
           disabled={isSaving}>
           {baseDirSaved ? "✓ Saved" : "Save Directory"}
+        </ButtonItem>
+      </DialogBody>
+
+      <DialogSubHeader>Auto shutdown</DialogSubHeader>
+      <DialogBody>
+        <Field label="Inactivity timeout (seconds)">
+          <TextField
+            description="Server will shut down after this many seconds of inactivity."
+            value={shutdownTimeout.toString()}
+            onChange={handleTimeoutChange}
+          />
+        </Field>
+
+        {timeoutErrorMessage && (
+          <div style={{ color: "red", fontWeight: "300" }}>
+            {timeoutErrorMessage}
+          </div>
+        )}
+
+        {timeoutSuccessMessage && (
+          <div style={{ color: "green", fontWeight: "bold" }}>
+            {timeoutSuccessMessage}
+          </div>
+        )}
+
+        <ButtonItem onClick={handleSaveTimeout} disabled={isSaving}>
+          {timeoutSaved ? "✓ Saved" : "Save Timeout"}
         </ButtonItem>
       </DialogBody>
 
