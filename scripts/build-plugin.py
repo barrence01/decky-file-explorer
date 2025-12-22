@@ -92,7 +92,7 @@ def build_plugin():
                 print(f"  WARNING: {file_name} not found, skipping...")
         
         # Copy directories
-        directories_to_copy = ["dist", "bin", "defaults"]
+        directories_to_copy = ["dist", "bin", "defaults", "backend"]
         
         for dir_name in directories_to_copy:
             dir_path = Path(dir_name)
