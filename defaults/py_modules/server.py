@@ -92,6 +92,16 @@ async def auth_middleware(request, handler):
 # Util methods
 # =========================
 
+def get_file_system_service() -> FileSystemService:
+    fs = None
+    try:
+        fs = FileSystemService(get_base_dir())
+    except FileSystemError as e:
+        decky.logger.exception(f"The directory {get_base_dir()} doesn't exist, fallback to {os.path.expanduser('~')}")
+        fs = FileSystemService(os.path.expanduser("~"))
+    return fs
+
+
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
@@ -140,7 +150,7 @@ def get_time_to_shutdown_timeout() -> int:
 class WebServer:
     def __init__(
         self,
-        fs: FileSystemService = FileSystemService(get_base_dir()),
+        fs: FileSystemService = get_file_system_service(),
         host=get_host_from_settings(),
         port=get_port_from_settings()
     ):
