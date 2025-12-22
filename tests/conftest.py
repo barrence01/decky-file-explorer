@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "defaults/py_modules"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(BACKEND))
+sys.path.insert(0, str(BACKEND / "externals"))
 
 from filesystem import FileSystemService
 

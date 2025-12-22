@@ -34,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
     mainContent.classList.toggle("shifted");
   });
   passwordEnterEvent();
+  checkLogin();
 });
 
 function showLoading() {
@@ -128,10 +129,14 @@ async function passwordEnterEvent() {
 
 function getParentPath(path) {
   if (!path) return null;
+  
+  const parts = path.replaceAll("\\","/").replace(/\/+$/, "").split("/");
 
-  const parts = path.replace(/\/+$/, "").split("/");
-
-  if (parts.length <= 2) return null;
+  if(path.includes(":")) {
+    if (parts.length <= 2) return null;
+  } else {
+    if (parts.length <= 3) return null;
+  }
 
   parts.pop();
   return parts.join("/") || "/";
@@ -619,7 +624,3 @@ function closePreview() {
   document.getElementById("previewModal").classList.add("hidden");
   document.getElementById("previewBody").innerHTML = "";
 }
-
-
-/* ---------- INIT ---------- */
-checkLogin();

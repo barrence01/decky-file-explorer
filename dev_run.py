@@ -5,9 +5,11 @@ from pathlib import Path
 
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
 SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
-BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
+PYTHON_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
+PYTHON_EXTERNAL_LIBS_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules/externals"
 LOG_DIR = Path(decky.DECKY_PLUGIN_LOG_DIR)
-sys.path.insert(0, str(BACKEND_DIR))
+sys.path.insert(0, str(PYTHON_DIR))
+sys.path.insert(0, str(PYTHON_EXTERNAL_LIBS_DIR))
 
 import asyncio
 from server import WebServer

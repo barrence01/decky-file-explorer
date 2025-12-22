@@ -74,11 +74,12 @@ def build_plugin():
         files_to_copy = [
             "tsconfig.json",
             "README.md",
-            "pnpm-lock.yaml",
+            "pyproject.toml",
             "plugin.json",
             "package.json",
             "main.py",
-            "LICENSE"
+            "LICENSE",
+            "THIRD-PARTY-NOTICES"
         ]
         
         print("Adding required files to zip...")
@@ -92,7 +93,7 @@ def build_plugin():
                 print(f"  WARNING: {file_name} not found, skipping...")
         
         # Copy directories
-        directories_to_copy = ["dist", "bin", "defaults"]
+        directories_to_copy = ["dist", "bin", "defaults", "backend"]
         
         for dir_name in directories_to_copy:
             dir_path = Path(dir_name)

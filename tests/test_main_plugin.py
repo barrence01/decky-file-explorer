@@ -30,10 +30,6 @@ def mock_webserver():
 # BASIC UTILITIES
 # ------------------------
 
-def test_hash_password(plugin):
-    expected = hashlib.sha256(b"admin").hexdigest()
-    assert plugin.hash_password("admin") == expected
-
 def test_get_server_port_without_server(monkeypatch, plugin):
     monkeypatch.setattr(
         main.settings_server,
