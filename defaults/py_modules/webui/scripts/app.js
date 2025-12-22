@@ -128,10 +128,14 @@ async function passwordEnterEvent() {
 
 function getParentPath(path) {
   if (!path) return null;
+  
+  const parts = path.replaceAll("\\","/").replace(/\/+$/, "").split("/");
 
-  const parts = path.replace(/\/+$/, "").split("/");
-
-  if (parts.length <= 2) return null;
+  if(path.includes(":")) {
+    if (parts.length <= 2) return null;
+  } else {
+    if (parts.length <= 1) return null;
+  }
 
   parts.pop();
   return parts.join("/") || "/";

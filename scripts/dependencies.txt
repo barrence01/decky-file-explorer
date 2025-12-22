@@ -1,5 +1,6 @@
 # To run plugin
 pip install aiohttp
+pip install bcrypt
 
 # To run tests
 pip install pytest

@@ -99,9 +99,6 @@ class Plugin:
     def is_port_free(self, port:int):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex(('localhost', port)) != 0
-    
-    def hash_password(self, password: str) -> str:
-        return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
     def check_path_exists_non_root(self, path: str) -> bool:
         if not path or not isinstance(path, str):
@@ -213,7 +210,7 @@ class Plugin:
     @log_exceptions
     async def reset_settings(self: 'Plugin'):
         settings_credentials.setSetting("user_login", "admin")
-        settings_credentials.setSetting("password_hash", self.hash_password("admin"))
+        settings_credentials.setSetting("password_hash", server.hash_password("admin"))
         settings_server.setSetting("port",8082)
         settings_server.setSetting("base_dir",os.path.expanduser("~"))
         settings_server.setSetting( server.DEFAULT_TIMEOUT_FIELD, server.DEFAULT_TIMEOUT_IN_SECONDS )

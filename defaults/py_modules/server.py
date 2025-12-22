@@ -9,6 +9,7 @@ import hmac
 import mimetypes
 import os
 import socket
+import bcrypt
 
 from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
 
@@ -92,18 +93,13 @@ async def auth_middleware(request, handler):
 # Util methods
 # =========================
 
-def get_file_system_service() -> FileSystemService:
-    fs = None
-    try:
-        fs = FileSystemService(get_base_dir())
-    except FileSystemError as e:
-        decky.logger.exception(f"The directory {get_base_dir()} doesn't exist, fallback to {os.path.expanduser('~')}")
-        fs = FileSystemService(os.path.expanduser("~"))
-    return fs
-
-
+# Credential
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode(), salt).decode()
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
 def check_credentials():
     login = settings_credentials.getSetting(USERNAME_FIELD)
@@ -112,6 +108,17 @@ def check_credentials():
         settings_credentials.setSetting(USERNAME_FIELD, "admin")
     if(password is None or password.strip() == ''):
         settings_credentials.setSetting(PASSWORD_FIELD, hash_password("admin"))
+
+# -------------------------------------------------------------------------------
+
+def get_file_system_service() -> FileSystemService:
+    fs = None
+    try:
+        fs = FileSystemService(get_base_dir())
+    except FileSystemError as e:
+        decky.logger.exception(f"The directory {get_base_dir()} doesn't exist, fallback to {os.path.expanduser('~')}")
+        fs = FileSystemService(os.path.expanduser("~"))
+    return fs
 
 def check_server_settings():
     if not settings_server.getSetting(BASE_DIR_FIELD):
@@ -220,12 +227,10 @@ class WebServer:
         if not input_login or not input_password:
             raise web.HTTPBadRequest(reason="Missing credentials")
 
-        stored_login = settings_credentials.getSetting(USERNAME_FIELD)
-        stored_password_hash = bytes.fromhex(settings_credentials.getSetting(PASSWORD_FIELD)) # type: ignore
+        stored_login = str(settings_credentials.getSetting(USERNAME_FIELD))
+        stored_password = str(settings_credentials.getSetting(PASSWORD_FIELD)) # type: ignore
 
-        input_password_hash = bytes.fromhex(hash_password(input_password))
-
-        if input_login != stored_login or not hmac.compare_digest(input_password_hash, stored_password_hash):
+        if (input_login != stored_login) or (not verify_password(input_password, stored_password)):
             raise web.HTTPUnauthorized(reason="Wrong credential")
 
         token = secrets.token_urlsafe(32)
