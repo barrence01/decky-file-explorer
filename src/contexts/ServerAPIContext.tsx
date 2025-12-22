@@ -1,5 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { serverAPI, ServerAPIService } from '../utils/ServerAPI';
+import { ErrorBoundary } from "../utils/ErrorBoundary";
 
 interface ServerAPIContextType {
   api: ServerAPIService;
@@ -13,9 +14,12 @@ interface ServerAPIProviderProps {
 
 export const ServerAPIProvider: React.FC<ServerAPIProviderProps> = ({ children }) => {
   return (
-    <ServerAPIContext.Provider value={{ api: serverAPI }}>
-      {children}
-    </ServerAPIContext.Provider>
+    
+      <ServerAPIContext.Provider value={{ api: serverAPI }}>
+        <ErrorBoundary api={serverAPI}>
+          {children}
+        </ErrorBoundary>
+      </ServerAPIContext.Provider>
   );
 };
 

@@ -9,7 +9,7 @@ import {
 } from "@decky/ui";
 import { useServerAPI } from "../contexts/ServerAPIContext";
 import { QRCodeSVG } from 'qrcode.react';
-import SettingsModal from "./modal/SettingsModal";
+import SettingsModal from "./SettingsModal";
 
 const Content: React.FC = () => {
   const api = useServerAPI();

@@ -31,6 +31,9 @@ export class ServerAPIService {
   private saveTimeoutSettings = callable<[value: number], ApiResponse>("save_timeout_settings");
   private getTimeoutSettings = callable<[], ApiResponse>("get_timeout_settings");
   private resetSettings = callable<[], void>("reset_settings"); 
+
+  // Util methods
+  private checkPathExistsInServer = callable<[value: string], ApiResponse>("check_path_exists");
   
   // Logging methods
   private logInfo = callable<[msg: string], void>("logInfo");
@@ -150,12 +153,12 @@ export class ServerAPIService {
     return response.success;
   }
 
-  async setTimeoutSettings(value: number) {
+  async setShutdownTimeoutSettings(value: number) {
     const response = await this.saveTimeoutSettings(value);
     return response.success;
   }
 
-  async getTimeoutFromSettings() {
+  async getShutdownTimeoutFromSettings() {
     const response = await this.getTimeoutSettings();
     if (response && response.success) {
       return response.data;
@@ -197,6 +200,14 @@ export class ServerAPIService {
   async getBaseDir(): Promise<string> {
     const baseDir = await this.getSetting("base_dir");
     return baseDir || "";
+  }
+
+  async checkPathExists(path: string): Promise<boolean> {
+    const response = await this.checkPathExistsInServer(path);
+    if (response.success) {
+      return response.data;
+    }
+    return true
   }
 
   // State getters

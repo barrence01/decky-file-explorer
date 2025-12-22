@@ -102,6 +102,18 @@ class Plugin:
     
     def hash_password(self, password: str) -> str:
         return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+    def check_path_exists_non_root(self, path: str) -> bool:
+        if not path or not isinstance(path, str):
+            return False
+
+        normalized_path = os.path.normpath(path)
+
+        # Disallow root directory
+        if normalized_path == os.sep:
+            return False
+
+        return os.path.isdir(normalized_path)
     
     # ----------------------------
     # Access to the server for the deckUI
@@ -205,7 +217,14 @@ class Plugin:
         settings_server.setSetting("port",8082)
         settings_server.setSetting("base_dir",os.path.expanduser("~"))
         settings_server.setSetting( server.DEFAULT_TIMEOUT_FIELD, server.DEFAULT_TIMEOUT_IN_SECONDS )
-        
+
+    # ----------------------------
+    # Util for the deckUI
+    # ----------------------------
+    async def check_path_exists(self: 'Plugin', path: str) -> dict[str, Any]:
+        return ApiResponse(self.check_path_exists_non_root(path)).to_dict()
+
+
     # ----------------------------
     # Logging for the deckUI
     # ----------------------------
