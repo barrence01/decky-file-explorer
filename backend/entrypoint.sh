@@ -1,14 +1,18 @@
 #!/bin/sh
 set -e
 
-echo "Container's IP address: $(awk 'END{print $1}' /etc/hosts)"
+# Go to plugin root (one level up from backend/)
+cd ..
 
-# Navigate to backend folder
-cd /backend
+# Check that the current folder is named "decky_file_explorer"
+CURRENT_DIR_NAME=$(basename "$PWD")
+if [ "$CURRENT_DIR_NAME" != "decky_file_explorer" ]; then
+    echo "Error: plugin root folder must be named 'decky_file_explorer'. Current folder is '$CURRENT_DIR_NAME'."
+    exit 1
+fi
 
-# Install dependencies
-make install_deps
+# Install Python dependencies from pyproject.toml
+pip install -e .
 
-# Run your Python backend
-# Adjust path since main.py is in plugin root
-python ../main.py
+# Run Python backend
+python main.py
