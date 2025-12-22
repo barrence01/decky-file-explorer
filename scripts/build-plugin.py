@@ -74,11 +74,12 @@ def build_plugin():
         files_to_copy = [
             "tsconfig.json",
             "README.md",
-            "pnpm-lock.yaml",
+            "pyproject.toml",
             "plugin.json",
             "package.json",
             "main.py",
-            "LICENSE"
+            "LICENSE",
+            "THIRD-PARTY-NOTICES"
         ]
         
         print("Adding required files to zip...")

@@ -1,0 +1,13 @@
+This product includes software developed by the bcrypt contributors.
+
+bcrypt
+License: Apache License, Version 2.0
+https://www.apache.org/licenses/LICENSE-2.0
+https://github.com/pyca/bcrypt/blob/main/LICENSE
+Copyright © bcrypt contributors
+
+aiohttp
+License: Apache License, Version 2.0
+https://www.apache.org/licenses/LICENSE-2.0
+https://github.com/aio-libs/aiohttp/blob/master/LICENSE.txt
+Copyright © aiohttp contributors

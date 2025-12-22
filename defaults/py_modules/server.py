@@ -131,7 +131,6 @@ def get_base_dir() -> str:
     if not base_dir:
         base_dir = os.path.expanduser("~")
         settings_server.setSetting(BASE_DIR_FIELD, base_dir)
-    decky.logger.info("Getting base_dir from settings: " + base_dir)
     return base_dir
 
 def get_host_from_settings() -> str:

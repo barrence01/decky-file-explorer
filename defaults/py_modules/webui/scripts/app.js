@@ -34,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
     mainContent.classList.toggle("shifted");
   });
   passwordEnterEvent();
+  checkLogin();
 });
 
 function showLoading() {
@@ -134,7 +135,7 @@ function getParentPath(path) {
   if(path.includes(":")) {
     if (parts.length <= 2) return null;
   } else {
-    if (parts.length <= 1) return null;
+    if (parts.length <= 3) return null;
   }
 
   parts.pop();
@@ -623,7 +624,3 @@ function closePreview() {
   document.getElementById("previewModal").classList.add("hidden");
   document.getElementById("previewBody").innerHTML = "";
 }
-
-
-/* ---------- INIT ---------- */
-checkLogin();
