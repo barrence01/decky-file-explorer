@@ -4,22 +4,19 @@ from pathlib import Path
 from typing import Union
 import asyncio
 import secrets
-import hashlib
-import hmac
 import mimetypes
 import os
 import socket
 import bcrypt
-
 from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
-
 import decky
 
 # Load user's settings
 from shared_settings import get_server_settings_manager, get_credentials_manager
-
 settings_credentials = get_credentials_manager()
 settings_server = get_server_settings_manager()
+
+from utils import log_exceptions 
 
 # =========================
 # Constants
@@ -37,6 +34,7 @@ USERNAME_FIELD = "user_login"
 BASE_DIR_FIELD = "base_dir"
 PORT_FIELD = "port"
 HOST_FIELD = "host"
+MAX_LOGIN_ATTEMPT_FIELD = "login_attempt"
 AUTH_TOKEN_FIELD = "auth_tokens"
 DEFAULT_TIMEOUT_FIELD = "shutdown_timeout_seconds"
 
@@ -108,6 +106,14 @@ def check_credentials():
         settings_credentials.setSetting(USERNAME_FIELD, "admin")
     if(password is None or password.strip() == ''):
         settings_credentials.setSetting(PASSWORD_FIELD, hash_password("admin"))
+
+def reset_settings():
+    settings_credentials.setSetting(USERNAME_FIELD, "admin")
+    settings_credentials.setSetting(PASSWORD_FIELD, hash_password("admin"))
+    settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, 0)
+    settings_server.setSetting(PORT_FIELD, DEFAULT_PORT)
+    settings_server.setSetting(BASE_DIR_FIELD, os.path.expanduser("~"))
+    settings_server.setSetting(DEFAULT_TIMEOUT_FIELD, DEFAULT_TIMEOUT_IN_SECONDS)
 
 # -------------------------------------------------------------------------------
 
@@ -214,6 +220,7 @@ class WebServer:
     # AUTH ENDPOINTS
     # --------------------
 
+    @log_exceptions
     async def login(self, request: web.Request):
         try:
             data = await request.json()
@@ -225,13 +232,23 @@ class WebServer:
 
         if not input_login or not input_password:
             raise web.HTTPBadRequest(reason="Missing credentials")
+        
+        login_attempt = int(settings_credentials.getSetting(MAX_LOGIN_ATTEMPT_FIELD) or 0)
+        if login_attempt > 10:
+            decky.logger.warning(f"The account has been locked for excess of attempts. This is attempt number {login_attempt}")
+            return web.json_response(
+                    {"error": "The account has been locked, please change the password and try again."},
+                    status=403)
 
         stored_login = str(settings_credentials.getSetting(USERNAME_FIELD))
         stored_password = str(settings_credentials.getSetting(PASSWORD_FIELD)) # type: ignore
 
         if (input_login != stored_login) or (not verify_password(input_password, stored_password)):
+            settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, login_attempt + 1)
+            decky.logger.warning(f"Failed attempt to login in webUI")
             raise web.HTTPUnauthorized(reason="Wrong credential")
 
+        settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, 0)
         token = secrets.token_urlsafe(32)
         self.app[AUTH_TOKEN_FIELD].add(token)
 
@@ -243,8 +260,10 @@ class WebServer:
             secure=False,      
             samesite="Strict"
         )
+        decky.logger.info("Successful login")
         return response
 
+    @log_exceptions
     async def logoff(self, request):
         token = request.cookies.get(AUTH_COOKIE)
 
@@ -255,6 +274,7 @@ class WebServer:
         response.del_cookie(AUTH_COOKIE)
         return response
     
+    @log_exceptions
     async def is_logged(self, request):
         # If middleware let it pass, user is logged
         return web.json_response({"logged": True})
@@ -262,10 +282,10 @@ class WebServer:
     # --------------------
     # PROTECTED ENDPOINTS - File operations
     # --------------------
-
     async def ping(self, request):
         return web.json_response({"status": "ok"})
 
+    @log_exceptions
     async def list_dir(self, request):
         try:
             data = await request.json()
@@ -297,7 +317,8 @@ class WebServer:
                 {"error": str(e)},
                 status=400
             )
-        
+    
+    @log_exceptions
     async def delete(self, request: web.Request):
         data = await request.json()
         paths = data.get("paths", [])
@@ -318,6 +339,7 @@ class WebServer:
         except FileSystemError as e:
             return web.json_response({"error": str(e)}, status=400)
     
+    @log_exceptions
     async def rename(self, request: web.Request):
         data = await request.json()
         path = data.get("path")
@@ -331,7 +353,8 @@ class WebServer:
             return web.json_response({"status": "ok"})
         except FileSystemError as e:
             return web.json_response({"error": str(e)}, status=400)
-        
+    
+    @log_exceptions
     async def paste(self, request: web.Request):
         data = await request.json()
 
@@ -369,6 +392,7 @@ class WebServer:
 
         return web.json_response({"status": "ok"})
     
+    @log_exceptions
     async def create_dir(self, request: web.Request):
         data = await request.json()
         path = data.get("path")
@@ -387,7 +411,7 @@ class WebServer:
     # =========================
     # PROTECTED ENDPOINTS - File streaming
     # =========================
-
+    @log_exceptions
     async def upload(self, request: web.Request):
         if not request.content_type.startswith("multipart/"):
             raise web.HTTPUnsupportedMediaType(
@@ -447,7 +471,7 @@ class WebServer:
                 status=400
             )
 
-
+    @log_exceptions
     async def download(self, request: web.Request):
         data = await request.json()
         paths = data.get("paths")
@@ -486,6 +510,7 @@ class WebServer:
 
         return response
 
+    @log_exceptions
     async def view_file(self, request: web.Request):
         path = request.query.get("path")
         if not path:
@@ -568,7 +593,6 @@ class WebServer:
     # --------------------
     # SERVER LIFECYCLE
     # --------------------
-
     async def start(self):
         decky.logger.info("Starting webUI server.")
         try:

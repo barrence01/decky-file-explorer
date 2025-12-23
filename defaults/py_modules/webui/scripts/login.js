@@ -26,7 +26,16 @@ async function doLogin() {
     });
 
     if(!res.ok) {
-      showError("Check your credentials and try again.");
+      try {
+        const data = await res.json();
+        if(data && data.error) {
+          showError(data.error)
+        } else {
+          showError("Check your credentials and try again.");
+        }
+      } catch(jsonError) {
+        showError("Check your credentials and try again.");
+      }
     }
     checkLogin();
   });

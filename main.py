@@ -185,6 +185,7 @@ class Plugin:
         decky.logger.info("Changing password settings")
         if value is None or value.strip() == "":
             raise InvalidPasswordFormatError("The password can't be blank")
+        settings_credentials.setSetting(server.MAX_LOGIN_ATTEMPT_FIELD, 0)
         value = server.hash_password(value)
         settings_credentials.setSetting( server.PASSWORD_FIELD, value )
         return ApiResponse().to_dict()
@@ -210,11 +211,8 @@ class Plugin:
 
     @log_exceptions
     async def reset_settings(self: 'Plugin'):
-        settings_credentials.setSetting("user_login", "admin")
-        settings_credentials.setSetting("password_hash", server.hash_password("admin"))
-        settings_server.setSetting("port",8082)
-        settings_server.setSetting("base_dir",os.path.expanduser("~"))
-        settings_server.setSetting( server.DEFAULT_TIMEOUT_FIELD, server.DEFAULT_TIMEOUT_IN_SECONDS )
+        decky.logger.info("Resetting all settings to default")
+        server.reset_settings()
 
     # ----------------------------
     # Util for the deckUI
