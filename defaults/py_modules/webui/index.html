@@ -9,20 +9,21 @@
 
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" />
-    <link rel="stylesheet" href="common.css?v=1.0.3.4" />
-    <script src="scripts/app.js?v=1.0.5."></script>
+    <link rel="stylesheet" href="scripts/common.css?v=1.0.4.6" />
+    <script src="scripts/app.js?v=1.0.6.9"></script>
     <script src="scripts/upload.js?v=1.0.0.4"></script>
+    <script src="scripts/login.js?v=1.0.0.5"></script>
+    <script src="scripts/gamerecording.js?v=1.0.1.9"></script>
   </head>
   <!-- SIDE PANEL -->
   <div id="sidePanel" class="side-panel">
-    <button id="logoffBtn" onclick="doLogoff()"><i class="fas fa-sign-out-alt"></i> Logoff</button>
-    <!--
-    <ul>
-      <li>Option 1</li>
-      <li>Option 2</li>
-      <li>Option 3</li>
-    </ul>
-    -->
+    <div id="side-panel-content">
+      <button id="logoffBtn" onclick="doLogoff()"><i class="fas fa-sign-out-alt"></i> Logoff</button>
+      <ul>
+        <button onclick="loadDir()">Home</button>
+        <button onclick="scanRecorgings()">Steam - Game Recording</button>
+      </ul>
+    </div>
   </div>
 
   <div id="previewModal" class="modal hidden">
@@ -35,6 +36,7 @@
   <body>
     <div id="mainContent">
       <div id="error-bar" class="error-bar hidden"></div>
+      <div id="success-bar" class="success-bar hidden"></div>
       <header>
         <i class="fas fa-bars hamburger"></i>
         <div class="breadcrumb" id="breadcrumb">/</div>
@@ -42,7 +44,7 @@
       </header>
 
       <!-- LOGIN -->
-      <div id="loginView">
+      <div id="loginView" style="display: flex;">
         <div class="login-box">
           <h2>Login</h2>
           <input type="text" id="login" placeholder="Login" />

@@ -94,10 +94,6 @@ header {
   cursor: pointer;
 }
 
-#logoffBtn {
-  display: none;
-}
-
 /* ---------- Toolbar ---------- */
 .toolbar {
   background: #fff;
@@ -216,6 +212,22 @@ header {
   z-index: 2000;
 }
 
+.success-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+
+  background-color: #008307;
+  color: white;
+
+  padding: 12px;
+  text-align: center;
+  font-weight: bold;
+
+  z-index: 2000;
+}
+
 /* ---------- Upload Loading ---------- */
 .progress-container {
   width: 100%;
@@ -291,9 +303,18 @@ header {
 
 #mainContent.shifted {
   transform: translateX(230px);
+  width: calc(100% - 230px);
 }
 
 /* ---------- Web View ---------- */
+#previewBody {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+
 .modal-content-media {
   background: #1e1e1e;
   color: #fff;
@@ -309,8 +330,11 @@ header {
 
 .modal-content-media.preview img,
 .modal-content-media.preview video {
-  max-width: 100%;
+  max-width: 90%;
+  max-height: 80vh;
+  display: block;
 }
+
 
 /* ---------- File Highlight ---------- */
 .file-item.highlight-folder {
@@ -393,4 +417,14 @@ body.loading * {
 .btn-interactive:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ---------- STEAM GAME RECORDING ---------- */
+.clip-thumbnail {
+  width: 64px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-right: 10px;
+  background: #111;
 }
