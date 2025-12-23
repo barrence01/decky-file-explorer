@@ -303,6 +303,7 @@ header {
 
 #mainContent.shifted {
   transform: translateX(230px);
+  width: calc(100% - 230px);
 }
 
 /* ---------- Web View ---------- */

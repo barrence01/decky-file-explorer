@@ -1,5 +1,6 @@
 async function scanRecorgings() {
   return withLoading(async () => {
+    hideSidePanel();
     selectedItems = [];
 
     const res = await fetch("/api/steam/clips", {
@@ -43,23 +44,25 @@ function updateGameRecordingToolbar() {
 }
 
 async function assembleVideo() {
-  const item = selectedItems[0];
+  return withLoading(async () => {
+    const item = selectedItems[0];
 
-  const res = await fetch("/api/steam/clips/assemble", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      mpd: item.mpd
-    })
+    const res = await fetch("/api/steam/clips/assemble", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mpd: item.mpd
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      showError(data.error || "Assemble failed");
+      return;
+    }
+    showSuccess("The video has been assembled. You can find it in the 'Videos' folder.")
   });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    showError(data.error || "Assemble failed");
-    return;
-  }
-  showSuccess("The video has been assembled. You can find it in the 'Videos' folder.")
 }
 
 function renderGameRecordingFiles(files) {
@@ -94,7 +97,6 @@ function renderGameRecordingFiles(files) {
         div.appendChild(icon);
         div.appendChild(name);
 
-        console.log(f)
         div.onclick = () => toggleGameRecordingSelect(div, f);
 
         div.ondblclick = () => {
@@ -130,4 +132,5 @@ function openGameRecordingPreview(file) {
     body.appendChild(img);
 
     document.getElementById("previewModal").classList.remove("hidden");
+    hideSidePanel();
 }

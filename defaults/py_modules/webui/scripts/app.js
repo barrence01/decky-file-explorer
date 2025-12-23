@@ -2,6 +2,7 @@ let currentPath = null;
 let selectedItems = [];
 let selectedDir = null;
 let errorTimeout = null;
+let successTimeout = null;
 let clipboardItems = [];
 let clipboardMode = null; // "copy" | "move"
 let showHidden = false;
@@ -47,6 +48,11 @@ function hideLoading() {
   document.getElementById("loadingOverlay").classList.add("hidden");
 }
 
+function hideSidePanel() {
+  sidePanel.classList.remove("visible");
+  mainContent.classList.remove("shifted");
+}
+
 async function withLoading(callback) {
   showLoading();
   try {
@@ -69,7 +75,7 @@ function showError(message) {
 
   errorTimeout = setTimeout(() => {
     bar.classList.add("hidden");
-  }, 10000);
+  }, 5000);
 }
 
 function showSuccess(message) {
@@ -79,13 +85,13 @@ function showSuccess(message) {
   bar.textContent = message;
   bar.classList.remove("hidden");
 
-  if (errorTimeout) {
-    clearTimeout(errorTimeout);
+  if (successTimeout) {
+    clearTimeout(successTimeout);
   }
 
-  errorTimeout = setTimeout(() => {
+  successTimeout = setTimeout(() => {
     bar.classList.add("hidden");
-  }, 10000);
+  }, 5000);
 }
 
 /* ---------- FILE VIEW ---------- */
@@ -113,6 +119,7 @@ function showFileView() {
 
 async function loadDir(path = null) {
   return withLoading(async () => {
+    hideSidePanel();
     selectedItems = [];
 
     const res = await fetch("/api/dir/list", {
@@ -570,6 +577,7 @@ function openPreview(file) {
   }
 
   document.getElementById("previewModal").classList.remove("hidden");
+  hideSidePanel();
 }
 
 function closePreview() {
