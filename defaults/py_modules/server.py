@@ -10,6 +10,9 @@ import socket
 import bcrypt
 from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
 import decky
+import gamerecording
+import subprocess
+import uuid
 
 # Load user's settings
 from shared_settings import get_server_settings_manager, get_credentials_manager
@@ -158,6 +161,10 @@ def get_time_to_shutdown_timeout() -> int:
         settings_server.setSetting(DEFAULT_TIMEOUT_FIELD, timeout)
     return timeout
 
+def get_videos_dir() -> Path:
+    videos = Path.home() / "Videos"
+    videos.mkdir(parents=True, exist_ok=True)
+    return videos
 
 class WebServer:
     def __init__(
@@ -204,7 +211,8 @@ class WebServer:
         self.app.router.add_post("/api/dir/paste", self.paste)
         self.app.router.add_post("/api/dir/create", self.create_dir)
         self.app.router.add_get("/api/file/view", self.view_file)
-
+        self.app.router.add_get("/api/steam/clips", self.list_steam_clips)
+        self.app.router.add_post("/api/steam/clips/assemble", self.assemble_steam_clip)
 
     def _setup_static(self):
         self.app.router.add_static(
@@ -588,6 +596,83 @@ class WebServer:
             decky.logger.info("Client disconnected during fallback streaming")
 
         return response
+    
+    # =========================
+    # PROTECTED ENDPOINTS - Game Recording
+    # =========================
+    @log_exceptions
+    async def list_steam_clips(self, request: web.Request):
+        clips = gamerecording.scan_steam_recordings()
+        return web.json_response({
+            "count": len(clips),
+            "clips": clips
+        })
+    
+    @log_exceptions
+    async def assemble_steam_clip(self, request: web.Request):
+        """
+        Expects JSON:
+        {
+            "mpd": "/full/path/to/session.mpd",
+            "outputName": "my_clip.mp4",   # optional
+            "overwrite": false             # optional
+        }
+        """
+
+        data = await request.json()
+
+        mpd_path = data.get("mpd")
+        output_name = data.get("outputName")
+        overwrite = bool(data.get("overwrite", False))
+
+        if not mpd_path:
+            raise web.HTTPBadRequest(reason="Missing mpd path")
+
+        mpd = Path(mpd_path)
+        if not mpd.exists() or mpd.name != "session.mpd":
+            raise web.HTTPBadRequest(reason="Invalid session.mpd path")
+
+        videos_dir = get_videos_dir()
+
+        # -------------------------------------------------
+        # Output name handling
+        # -------------------------------------------------
+        if not output_name:
+            output_name = f"steam_clip_{uuid.uuid4().hex[:12]}.mp4"
+
+        output_path = videos_dir / output_name
+
+        # -------------------------------------------------
+        # Conflict handling
+        # -------------------------------------------------
+        if output_path.exists() and not overwrite:
+            return web.json_response(
+                {
+                    "error": "conflict",
+                    "files": [output_path.name]
+                },
+                status=409
+            )
+
+        loop = asyncio.get_running_loop()
+
+        try:
+            await loop.run_in_executor(
+                None,
+                gamerecording.assemble_dash_to_mp4,
+                str(mpd),
+                output_path
+            )
+        except subprocess.CalledProcessError:
+            raise web.HTTPInternalServerError(reason="FFmpeg failed assembling clip")
+        except Exception as e:
+            raise web.HTTPInternalServerError(reason=str(e))
+
+        return web.json_response({
+            "status": "ok",
+            "output": str(output_path),
+            "overwritten": overwrite
+        })
 
 
     # --------------------
