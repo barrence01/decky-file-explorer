@@ -56,73 +56,20 @@ async function withLoading(callback) {
   }
 }
 
+function showError(message) {
+  const bar = document.getElementById("error-bar");
+  if (!bar) return;
 
-/* ---------- AUTH ---------- */
-async function checkLogin() {
-  return withLoading(async () => {
-    const res = await fetch("/api/login/is-logged");
+  bar.textContent = message;
+  bar.classList.remove("hidden");
 
-    if (res.ok) {
-      document.getElementById("logoffBtn").style.display = "block";
-      showFileView();
-    } else {
-      document.getElementById("logoffBtn").style.display = "none";
-      document.getElementById("loginView").style.display = "flex";
-    }
-  });
-}
-
-
-async function doLogin() {
-  return withLoading(async () => {
-    const login = document.getElementById("login").value;
-    const password = document.getElementById("password").value;
-
-    const res = await fetch("api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ login, password }),
-    });
-
-    if(!res.ok) {
-      showError("Check your credentials and try again.");
-    }
-    checkLogin();
-  });
-}
-
-async function doLogoff() {
-  const res = await fetch("/api/logoff", { method: "GET" });
-
-  if (!res.ok) {
-    showError("Failed to log off");
-    return;
+  if (errorTimeout) {
+    clearTimeout(errorTimeout);
   }
 
-  // Clear UI state
-  selectedItems = [];
-  clipboardItems = [];
-  clipboardMode = null;
-  currentPath = null;
-
-  // Hide file view, show login, logoff
-  document.getElementById("fileView").style.display = "none";
-  document.getElementById("loginView").style.display = "flex";
-  document.getElementById("logoffBtn").style.display = "none";
-
-  // Hide hamburger menu
-  const hamburger = document.querySelector(".hamburger");
-  hamburger.click();
-}
-
-async function passwordEnterEvent() {
-  const passwordInput = document.getElementById('password');
-
-  passwordInput.addEventListener('keydown', function(event) {
-    if (event.key === 'Enter') {
-      doLogin();
-    }
-  });
+  errorTimeout = setTimeout(() => {
+    bar.classList.add("hidden");
+  }, 10000);
 }
 
 /* ---------- FILE VIEW ---------- */
@@ -200,10 +147,16 @@ function renderFiles(files) {
     else icon.className = "fas fa-file";
 
     const name = document.createElement("div");
-    name.className = "file-name";
-        name.innerText = f.isDir
-      ? f.path.split("/").pop()
-      : f.name;
+
+    // For non linux path
+    if(f.path?.includes("\\\\")) {
+      name.className = "file-name";
+      name.innerText = f.isDir ? f.path.split("\\").pop() : f.name;
+    } else {
+      name.className = "file-name";
+      name.innerText = f.isDir ? f.path.split("/").pop() : f.name;
+    }
+
 
     div.appendChild(icon);
     div.appendChild(name);
@@ -233,23 +186,6 @@ function shouldHighlightFolder(file) {
   //return HIGHLIGHT_FOLDERS.some(n => name.includes(n));
   //const HIGHLIGHT_PATTERNS = [/^steam/i, /^game/i];
   //return HIGHLIGHT_PATTERNS.some(rx => rx.test(name));
-}
-
-
-function showError(message) {
-  const bar = document.getElementById("error-bar");
-  if (!bar) return;
-
-  bar.textContent = message;
-  bar.classList.remove("hidden");
-
-  if (errorTimeout) {
-    clearTimeout(errorTimeout);
-  }
-
-  errorTimeout = setTimeout(() => {
-    bar.classList.add("hidden");
-  }, 10000);
 }
 
 /* ---------- SELECTION / TOOLBAR ---------- */
@@ -457,7 +393,7 @@ async function renameSelected() {
   loadDir(currentPath);
 }
 
-/* Properties Modal */
+/* ---------- PROPERTIES ---------- */
 function showPropertiesModal() {
   let target = null;
 
