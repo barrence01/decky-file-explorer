@@ -4,11 +4,10 @@ async function checkLogin() {
     const res = await fetch("/api/login/is-logged");
 
     if (res.ok) {
-      document.getElementById("logoffBtn").style.display = "block";
+      document.getElementById("side-panel-content").style.display = "block";
       showFileView();
     } else {
-      document.getElementById("logoffBtn").style.display = "none";
-      document.getElementById("loginView").style.display = "flex";
+      document.getElementById("side-panel-content").style.display = "none";
     }
   });
 }
@@ -58,7 +57,7 @@ async function doLogoff() {
   // Hide file view, show login, logoff
   document.getElementById("fileView").style.display = "none";
   document.getElementById("loginView").style.display = "flex";
-  document.getElementById("logoffBtn").style.display = "none";
+  document.getElementById("side-panel-content").style.display = "none";
 
   // Hide hamburger menu
   const hamburger = document.querySelector(".hamburger");

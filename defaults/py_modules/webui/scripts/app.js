@@ -72,6 +72,22 @@ function showError(message) {
   }, 10000);
 }
 
+function showSuccess(message) {
+  const bar = document.getElementById("success-bar");
+  if (!bar) return;
+
+  bar.textContent = message;
+  bar.classList.remove("hidden");
+
+  if (errorTimeout) {
+    clearTimeout(errorTimeout);
+  }
+
+  errorTimeout = setTimeout(() => {
+    bar.classList.add("hidden");
+  }, 10000);
+}
+
 /* ---------- FILE VIEW ---------- */
 
 function getParentPath(path) {

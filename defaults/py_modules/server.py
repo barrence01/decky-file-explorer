@@ -213,6 +213,8 @@ class WebServer:
         self.app.router.add_get("/api/file/view", self.view_file)
         self.app.router.add_get("/api/steam/clips", self.list_steam_clips)
         self.app.router.add_post("/api/steam/clips/assemble", self.assemble_steam_clip)
+        self.app.router.add_get("/api/steam/clips/thumbnail/{clipId}", self.get_steam_clip_thumbnail)
+
 
     def _setup_static(self):
         self.app.router.add_static(
@@ -614,7 +616,6 @@ class WebServer:
         Expects JSON:
         {
             "mpd": "/full/path/to/session.mpd",
-            "outputName": "my_clip.mp4",   # optional
             "overwrite": false             # optional
         }
         """
@@ -622,7 +623,6 @@ class WebServer:
         data = await request.json()
 
         mpd_path = data.get("mpd")
-        output_name = data.get("outputName")
         overwrite = bool(data.get("overwrite", False))
 
         if not mpd_path:
@@ -631,14 +631,15 @@ class WebServer:
         mpd = Path(mpd_path)
         if not mpd.exists() or mpd.name != "session.mpd":
             raise web.HTTPBadRequest(reason="Invalid session.mpd path")
+        
+        clip_main_folder = mpd.parent.parent.parent.name
 
         videos_dir = get_videos_dir()
 
         # -------------------------------------------------
         # Output name handling
         # -------------------------------------------------
-        if not output_name:
-            output_name = f"steam_clip_{uuid.uuid4().hex[:12]}.mp4"
+        output_name = f"steam_{clip_main_folder}.mp4"
 
         output_path = videos_dir / output_name
 
@@ -648,7 +649,7 @@ class WebServer:
         if output_path.exists() and not overwrite:
             return web.json_response(
                 {
-                    "error": "conflict",
+                    "error": "There is already a file with the same name in the 'Videos' folder",
                     "files": [output_path.name]
                 },
                 status=409
@@ -673,6 +674,26 @@ class WebServer:
             "output": str(output_path),
             "overwritten": overwrite
         })
+    
+    @log_exceptions
+    async def get_steam_clip_thumbnail(self, request: web.Request):
+        clip_id = request.match_info["clipId"]
+
+        clips = gamerecording.scan_steam_recordings()
+
+        for clip in clips:
+            if clip["clipId"] == clip_id and clip["thumbnail"]:
+                thumbnail_path = Path(clip["thumbnail"])
+
+                if thumbnail_path.exists():
+                    return web.FileResponse(
+                        thumbnail_path,
+                        headers={
+                            "Cache-Control": "public, max-age=86400"
+                        }
+                    )
+
+        raise web.HTTPNotFound(reason="Thumbnail not found")
 
 
     # --------------------
