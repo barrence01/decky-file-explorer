@@ -108,15 +108,18 @@ function renderGameRecordingFiles(files) {
 }
 
 function toggleGameRecordingSelect(el, file) {
-  const idx = selectedItems.indexOf(file);
-
-  if (idx >= 0) {
-    selectedItems.splice(idx, 1);
+  if (selectedItems.length === 1 && selectedItems[0] === file) {
+    selectedItems = [];
     el.classList.remove("selected");
-  } else {
-    selectedItems.push(file);
-    el.classList.add("selected");
+    updateGameRecordingToolbar();
+    return;
   }
+
+  document.querySelectorAll(".selected")
+          .forEach(e => e.classList.remove("selected"));
+
+  selectedItems = [file];
+  el.classList.add("selected");
 
   updateGameRecordingToolbar();
 }
