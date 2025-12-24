@@ -109,6 +109,10 @@ export function setCurrentPath(value) {
   currentPath = value;
 }
 
+export function setShowHidden(value) {
+  showHidden = value;
+}
+
 // function isMobile() {
 //   const ua = navigator.userAgent.toLowerCase();
 //   return ['android', 'iphone', 'ipad', 'ipod', 'mobile'].some(x => ua.includes(x));
@@ -410,7 +414,7 @@ export async function renameSelected() {
 }
 
 /* ---------- PROPERTIES ---------- */
-function showPropertiesModal() {
+export function showPropertiesModal() {
   let target = null;
 
   if (selectedItems.length === 1) {
@@ -485,6 +489,9 @@ export function startMove() {
 function clearClipboard() {
   clipboardItems = [];
   clipboardMode = null;
+  selectedItems = [];
+  document.querySelectorAll('div.file-item.selected')
+          .forEach(div => div.classList.remove("selected"));
   updateToolbar();
 }
 

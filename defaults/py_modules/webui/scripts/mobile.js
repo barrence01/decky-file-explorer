@@ -1,9 +1,9 @@
-import { openPreview, loadDir, toggleSelect, toolbarButton,
-         createNewFolder, startMove, startCopy, deleteSelected,
-         renameSelected
+import { openPreview, loadDir, toggleSelect, selectedItems, currentPath,
+         toolbarButton, createNewFolder, startMove, startCopy, deleteSelected,
+         renameSelected, showHidden, setShowHidden, showPropertiesModal
         } from './app.js';
 
-import { downloadSelected, uploadFiles } from './upload.js?v=1.0.0.0';
+import { downloadSelected, uploadFiles } from './upload.js';
 
 export function addMobileRenderInteractions(div, f) {
     let pressTimer = null;
@@ -63,7 +63,7 @@ export function addMobileToolbarButtons(bar, selectionCount) {
         label: "Show hidden",
         checked: showHidden,
         action: () => {
-            showHidden = !showHidden;
+            setShowHidden(!showHidden);
             loadDir(currentPath);
         }
     });
