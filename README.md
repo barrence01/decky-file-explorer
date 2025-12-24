@@ -12,23 +12,23 @@ I have added a feature in the hamburguer button to simplify this process, there 
 
 
 # Main menu of the plugin
-<img width="500" height="967" alt="HOME_MENU" src="https://github.com/user-attachments/assets/3efce970-82f7-4af6-a999-493f687787b4" />
+<img width="20%" height="20%" alt="HOME_MENU" src="https://github.com/user-attachments/assets/3efce970-82f7-4af6-a999-493f687787b4" />
 
 # Settings
-<img width="948" height="951" alt="SETTINGS_MENU" src="https://github.com/user-attachments/assets/6f7685c5-05b5-4c0c-81c0-8f8d2e583245" />
+<img width="30%" height="30%" alt="SETTINGS_MENU" src="https://github.com/user-attachments/assets/6f7685c5-05b5-4c0c-81c0-8f8d2e583245" />
 
 # Web UI - Main Menu
-<img width="1920" height="901" alt="WEBUI_DESKTOP_MAIN_MENU" src="https://github.com/user-attachments/assets/862306d4-d099-4200-82c8-f10ca648558a" />
+<img width="60%" height="60%"  alt="WEBUI_DESKTOP_MAIN_MENU" src="https://github.com/user-attachments/assets/862306d4-d099-4200-82c8-f10ca648558a" />
 
 # Web UI - Mobile
-![Screenshot_20251224_192659_Chrome](https://github.com/user-attachments/assets/f6f07dc5-c625-4cfc-80a8-7e6d3d0de733)
+<img width="20%" height="20%" alt="WEBUI_MOBILE_MAIN_MENU" src="https://github.com/user-attachments/assets/f6f07dc5-c625-4cfc-80a8-7e6d3d0de733" />
 
 
 # Assembling game records
-<img width="1920" height="909" alt="ASSEMBLE_GAME_RECORDING" src="https://github.com/user-attachments/assets/13b291bb-0108-483c-bbf1-0fbb3594708e" />
+<img width="60%" height="60%" alt="ASSEMBLE_GAME_RECORDING" src="https://github.com/user-attachments/assets/13b291bb-0108-483c-bbf1-0fbb3594708e" />
 
 # Video Playback
-<img width="1913" height="905" alt="VIDEO_PLAYBACK_GAME_RECORDING" src="https://github.com/user-attachments/assets/68d5a9cc-22c9-4f53-b3c7-eb1f9b671279" />
+<img width="60%" height="60%" alt="VIDEO_PLAYBACK_GAME_RECORDING" src="https://github.com/user-attachments/assets/68d5a9cc-22c9-4f53-b3c7-eb1f9b671279" />
 
 
 
