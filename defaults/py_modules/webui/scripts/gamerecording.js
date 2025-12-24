@@ -1,6 +1,6 @@
 import { hideSidePanel, toolbarButton, withLoading, showSuccess, showError, selectedItems, setSelectedItems } from './app.js';
 
-export async function scanRecorgings() {
+export async function scanRecordings() {
   return withLoading(async () => {
     hideSidePanel();
     setSelectedItems([]);
@@ -30,7 +30,7 @@ function updateGameRecordingToolbar() {
     toolbarButton(
       "Refresh",
       "fas fa-rotate-right",
-      () => scanRecorgings()
+      () => scanRecordings()
     )
   );
 

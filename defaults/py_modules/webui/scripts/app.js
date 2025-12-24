@@ -1,4 +1,4 @@
-import { scanRecorgings } from "./gamerecording.js";
+import { scanRecordings } from "./gamerecording.js";
 import { downloadSelected, uploadFiles } from './upload.js';
 import { addMobileRenderInteractions, addMobileToolbarButtons } from "./mobile.js";
 import { checkLogin, doLogin, doLogoff } from "./login.js";
@@ -9,7 +9,7 @@ window.closePreview = closePreview;
 window.doLogoff = doLogoff;
 window.loadDir = loadDir;
 window.closePropertiesModal = closePropertiesModal;
-window.scanRecorgings = scanRecorgings;
+window.scanRecordings = scanRecordings;
 
 export let currentPath = null;
 export let selectedItems = [];

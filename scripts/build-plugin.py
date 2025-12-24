@@ -43,6 +43,32 @@ def run_pnpm_build(path: Path):
         print(result.stderr)
         if result.returncode != 0:
             raise RuntimeError("pnpm build failed")
+        
+def add_directory_to_zip(
+    zipf: zipfile.ZipFile,
+    base_dir: Path,
+    parent_folder_name: str,
+    dirs_to_ignore: list[str] = [],
+    files_to_ignore: list[str] = []
+):
+    """
+    Recursively add files from base_dir to zip,
+    ignoring directories listed in dirs_to_ignore.
+    """
+    for item in base_dir.iterdir():
+        if item.is_dir():
+            if item.name in dirs_to_ignore:
+                print(f"  ⏭ Skipping directory: {item}")
+                continue
+            add_directory_to_zip(zipf, item, parent_folder_name, dirs_to_ignore, files_to_ignore)
+        else:
+            if item.name in files_to_ignore:
+                print(f"  ⏭ Skipping file: {item}")
+                continue
+            arcname = f"{parent_folder_name}/{item.relative_to('.')}"
+            zipf.write(item, arcname)
+            print(f"  ✓ Added {item}")
+
 
 def build_plugin():
     print("=== Plugin Build Script ===")
@@ -79,7 +105,10 @@ def build_plugin():
             "package.json",
             "main.py",
             "LICENSE",
-            "THIRD-PARTY-NOTICES"
+            "THIRD-PARTY-NOTICES",
+            "pnpm-lock.yaml",
+            "rollup.config.js",
+            "decky.pyi"
         ]
         
         print("Adding required files to zip...")
@@ -94,20 +123,24 @@ def build_plugin():
         
         # Copy directories
         directories_to_copy = ["dist", "bin", "defaults", "backend"]
-        
+        files_to_ignore = []
+        dirs_to_ignore = ["__pycache__"]
+
         for dir_name in directories_to_copy:
             dir_path = Path(dir_name)
             if dir_path.exists() and dir_path.is_dir():
                 print(f"Adding {dir_name} directory to zip...")
-                # Walk through directory and add all files
-                for file_path in dir_path.rglob('*'):
-                    if file_path.is_file():
-                        # Create proper path in zip
-                        arcname = f"{parent_folder_name}/{file_path.relative_to('.')}"
-                        zipf.write(file_path, arcname)
+                add_directory_to_zip(
+                    zipf,
+                    dir_path,
+                    parent_folder_name,
+                    dirs_to_ignore,
+                    files_to_ignore
+                )
                 print(f"  ✓ {dir_name} added")
             else:
                 print(f"  WARNING: {dir_name} directory not found")
+
     
     # Calculate file count and size
     file_count = 0
