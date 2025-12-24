@@ -1,7 +1,9 @@
-async function scanRecorgings() {
+import { hideSidePanel, toolbarButton, withLoading, showSuccess, showError, selectedItems, setSelectedItems } from './app.js';
+
+export async function scanRecordings() {
   return withLoading(async () => {
     hideSidePanel();
-    selectedItems = [];
+    setSelectedItems([]);
 
     const res = await fetch("/api/steam/clips", {
       method: "GET",
@@ -28,7 +30,7 @@ function updateGameRecordingToolbar() {
     toolbarButton(
       "Refresh",
       "fas fa-rotate-right",
-      () => scanRecorgings()
+      () => scanRecordings()
     )
   );
 
@@ -109,7 +111,7 @@ function renderGameRecordingFiles(files) {
 
 function toggleGameRecordingSelect(el, file) {
   if (selectedItems.length === 1 && selectedItems[0] === file) {
-    selectedItems = [];
+    setSelectedItems([]);
     el.classList.remove("selected");
     updateGameRecordingToolbar();
     return;
@@ -118,7 +120,7 @@ function toggleGameRecordingSelect(el, file) {
   document.querySelectorAll(".selected")
           .forEach(e => e.classList.remove("selected"));
 
-  selectedItems = [file];
+  setSelectedItems([file]);
   el.classList.add("selected");
 
   updateGameRecordingToolbar();

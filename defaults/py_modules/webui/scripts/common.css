@@ -197,7 +197,7 @@ header {
 
 /* ---------- Error Bar ---------- */
 .error-bar {
-  position: fixed;
+  position: relative;
   top: 0;
   left: 0;
   right: 0;
@@ -213,7 +213,7 @@ header {
 }
 
 .success-bar {
-  position: fixed;
+  position: relative;
   top: 0;
   left: 0;
   right: 0;
@@ -427,4 +427,37 @@ body.loading * {
   border-radius: 4px;
   margin-right: 10px;
   background: #111;
+}
+
+
+/* ---------- 3 dots context menu - mobile ---------- */
+.overflow-menu {
+  position: relative;
+  margin-left: auto;
+}
+
+.overflow-menu-content {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background: #fff;
+  border-radius: 6px;
+  min-width: 160px;
+  box-shadow: 0 4px 10px rgba(0,0,0,.3);
+  z-index: 100;
+}
+
+.overflow-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.overflow-menu-item:hover {
+  background: #ccc;
+}
+
+.overflow-menu-item input {
+  pointer-events: auto;
 }

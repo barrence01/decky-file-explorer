@@ -1,6 +1,8 @@
-/* ---------- UPLOAD ---------- */
+import { loadDir, selectedItems, showError, showSuccess,
+         currentPath } from './app.js';
 
-async function uploadFiles() {
+/* ---------- UPLOAD ---------- */
+export async function uploadFiles() {
   const input = document.createElement("input");
   input.type = "file";
   input.multiple = true;
@@ -84,7 +86,7 @@ function updateUploadProgress(percent) {
 
 /* ---------- DOWNLOAD ---------- */
 
-async function downloadSelected() {
+export async function downloadSelected() {
   if (!selectedItems.length) return;
 
   const paths = selectedItems.map(i => i.path);

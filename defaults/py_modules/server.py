@@ -423,66 +423,70 @@ class WebServer:
     # =========================
     @log_exceptions
     async def upload(self, request: web.Request):
+        decky.logger.info(f"File upload - initiated")
         if not request.content_type.startswith("multipart/"):
-            raise web.HTTPUnsupportedMediaType(
-                reason="Content-Type must be multipart/form-data"
-            )
+            raise web.HTTPUnsupportedMediaType(reason="Content-Type must be multipart/form-data")
 
         reader: Union[MultipartReader, BodyPartReader] = await request.multipart()
 
         target_dir = None
-        file_field: Union[BodyPartReader, None] = None
 
         if not isinstance(reader, MultipartReader):
+            decky.logger.exception(f"File upload - Invalid multipart data")
             raise web.HTTPBadRequest(reason="Invalid multipart data")
 
-        async for field in reader: # type: ignore
-            field: aiohttp.BodyPartReader
+        async for part in reader: # type: ignore
+            part: aiohttp.BodyPartReader
 
-            if field.name == "path":
-                target_dir = (await field.read()).decode().strip()
-            elif field.name == "file":
-                file_field = field
+            if part.name == "path":
+                target_dir = (await part.read()).decode().strip()
+            elif part.name == "file":
+                filename = part.filename
 
-        if not target_dir:
-            raise web.HTTPBadRequest(reason="Missing upload path")
+                decky.logger.info(f"File upload - filename: {filename}")
+                if not target_dir:
+                    decky.logger.exception(f"File upload - Missing upload path")
+                    raise web.HTTPBadRequest(reason="Missing upload path")
 
-        if not file_field or not file_field.filename:
-            raise web.HTTPBadRequest(reason="Missing file")
+                if not filename:
+                    decky.logger.exception(f"File upload - Missing file")
+                    raise web.HTTPBadRequest(reason="Missing file")
 
-        filename = os.path.basename(file_field.filename)
-        target_path = os.path.join(target_dir, filename)
+                filename = os.path.basename(filename)
+                target_path = os.path.join(target_dir, filename)
+                decky.logger.info(f"File upload - Filename: {filename} | target_path: {target_path}")
+                loop = asyncio.get_running_loop()
 
-        loop = asyncio.get_running_loop()
+                try:
+                    stream = self.fs.open_write_stream(target_path)
+                    try:
+                        while True:
+                            chunk = await part.read_chunk(64 * 1024)
+                            if not chunk:
+                                break
 
-        try:
-            stream = self.fs.open_write_stream(target_path)
+                            # Write in executor to avoid blocking event loop
+                            await loop.run_in_executor(None, stream.write, chunk)
 
-            try:
-                while True:
-                    chunk = await file_field.read_chunk()
-                    if not chunk:
-                        break
-
-                    # Write in executor to avoid blocking event loop
-                    await loop.run_in_executor(None, stream.write, chunk)
-
-            finally:
-                await loop.run_in_executor(None, stream.close)
-
-            return web.json_response({
-                "status": "ok",
-                "filename": filename
-            })
-
-        except FileAlreadyExistsError:
-            return web.json_response(
-                {"error": "File already exists"},
-                status=400
-            )
+                    finally:
+                        await loop.run_in_executor(None, stream.close)
+                    return web.json_response({
+                        "status": "ok",
+                        "filename": filename
+                    })
+                except FileAlreadyExistsError:
+                    decky.logger.warning("File upload - File already exists")
+                    return web.json_response(
+                        {"error": "File already exists"},
+                        status=400
+                    )
+        return web.json_response({
+            "status": "ok"
+        })
 
     @log_exceptions
     async def download(self, request: web.Request):
+        decky.logger.info(f"File download - initiated")
         data = await request.json()
         paths = data.get("paths")
 
@@ -491,6 +495,7 @@ class WebServer:
 
         # Single file - direct download
         if len(paths) == 1:
+            decky.logger.info(f"File download - only one file found")
             obj = self.fs.get_object(paths[0])
 
             if obj.isFile():
@@ -507,6 +512,7 @@ class WebServer:
                 await response.write_eof()
                 return response
 
+        decky.logger.info(f"File download - multiple files detected, creating zip")
         # Multiple or directory - ZIP
         zip_buffer = self.fs.stream_zip(paths)
 
