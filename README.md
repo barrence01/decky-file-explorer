@@ -20,6 +20,10 @@ I have added a feature in the hamburguer button to simplify this process, there 
 # Web UI - Main Menu
 <img width="1920" height="901" alt="WEBUI_DESKTOP_MAIN_MENU" src="https://github.com/user-attachments/assets/862306d4-d099-4200-82c8-f10ca648558a" />
 
+# Web UI - Mobile
+![Screenshot_20251224_192659_Chrome](https://github.com/user-attachments/assets/f6f07dc5-c625-4cfc-80a8-7e6d3d0de733)
+
+
 # Assembling game records
 <img width="1920" height="909" alt="ASSEMBLE_GAME_RECORDING" src="https://github.com/user-attachments/assets/13b291bb-0108-483c-bbf1-0fbb3594708e" />
 
