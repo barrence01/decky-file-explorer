@@ -1,13 +1,26 @@
-let currentPath = null;
-let selectedItems = [];
-let selectedDir = null;
-let errorTimeout = null;
-let successTimeout = null;
-let clipboardItems = [];
-let clipboardMode = null; // "copy" | "move"
-let showHidden = false;
+import { scanRecorgings } from "./gamerecording.js";
+import { downloadSelected, uploadFiles } from './upload.js';
+import { addMobileRenderInteractions, addMobileToolbarButtons } from "./mobile.js";
+import { checkLogin, doLogin, doLogoff } from "./login.js";
 
-const HIGHLIGHT_FOLDERS = [
+/* ---------- Exposing functions to DOM ---------- */
+window.doLogin = doLogin;
+window.closePreview = closePreview;
+window.doLogoff = doLogoff;
+window.loadDir = loadDir;
+window.closePropertiesModal = closePropertiesModal;
+window.scanRecorgings = scanRecorgings;
+
+export let currentPath = null;
+export let selectedItems = [];
+export let selectedDir = null;
+export let errorTimeout = null;
+export let successTimeout = null;
+export let clipboardItems = [];
+export let clipboardMode = null; // "copy" | "move"
+export let showHidden = false;
+
+export const HIGHLIGHT_FOLDERS = [
   "Downloads",
   "Pictures",
   "Videos",
@@ -24,36 +37,22 @@ const HIGHLIGHT_FOLDERS = [
   "Settings"
 ].map(n => n.toLowerCase());
 
-
-document.addEventListener("DOMContentLoaded", () => {
-  const hamburger = document.querySelector(".hamburger");
-  const sidePanel = document.getElementById("sidePanel");
-  const mainContent = document.getElementById("mainContent");
-
-  hamburger.addEventListener("click", () => {
-    sidePanel.classList.toggle("visible");
-    mainContent.classList.toggle("shifted");
-  });
-  passwordEnterEvent();
-  checkLogin();
-});
-
-function showLoading() {
+export function showLoading() {
   document.body.classList.add("loading");
   document.getElementById("loadingOverlay").classList.remove("hidden");
 }
 
-function hideLoading() {
+export function hideLoading() {
   document.body.classList.remove("loading");
   document.getElementById("loadingOverlay").classList.add("hidden");
 }
 
-function hideSidePanel() {
+export function hideSidePanel() {
   sidePanel.classList.remove("visible");
   mainContent.classList.remove("shifted");
 }
 
-async function withLoading(callback) {
+export async function withLoading(callback) {
   showLoading();
   try {
     return await callback();
@@ -62,7 +61,7 @@ async function withLoading(callback) {
   }
 }
 
-function showError(message) {
+export function showError(message) {
   const bar = document.getElementById("error-bar");
   if (!bar) return;
 
@@ -78,7 +77,7 @@ function showError(message) {
   }, 5000);
 }
 
-function showSuccess(message) {
+export function showSuccess(message) {
   const bar = document.getElementById("success-bar");
   if (!bar) return;
 
@@ -93,6 +92,32 @@ function showSuccess(message) {
     bar.classList.add("hidden");
   }, 5000);
 }
+
+export function setSelectedItems(value) {
+  selectedItems = value;
+}
+
+export function setClipboardItems(value) {
+  clipboardItems = value;
+}
+
+export function setClipboardMode(value) {
+  clipboardMode = value;
+}
+
+export function setCurrentPath(value) {
+  currentPath = value;
+}
+
+// function isMobile() {
+//   const ua = navigator.userAgent.toLowerCase();
+//   return ['android', 'iphone', 'ipad', 'ipod', 'mobile'].some(x => ua.includes(x));
+// }
+
+function isMobile() {
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
 
 /* ---------- FILE VIEW ---------- */
 
@@ -111,13 +136,13 @@ function getParentPath(path) {
   return parts.join("/") || "/";
 }
 
-function showFileView() {
+export function showFileView() {
   document.getElementById("loginView").style.display = "none";
   document.getElementById("fileView").style.display = "block";
   loadDir();
 }
 
-async function loadDir(path = null) {
+export async function loadDir(path = null) {
   return withLoading(async () => {
     hideSidePanel();
     selectedItems = [];
@@ -184,18 +209,11 @@ function renderFiles(files) {
     div.appendChild(icon);
     div.appendChild(name);
 
-    div.onclick = () => toggleSelect(div, f);
-    div.ondblclick = () => {
-      if (f.isDir) loadDir(f.path);
-    };
-
-    div.ondblclick = () => {
-      if (f.isDir) {
-        loadDir(f.path);
-      } else if (f.type === "image" || f.type === "video") {
-        openPreview(f);
-      }
-    };
+    if (isMobile()) {
+      addMobileRenderInteractions(div, f);
+    } else {
+      addDesktopRenderInteractions(div, f);
+    }
 
     list.appendChild(div);
   });
@@ -211,8 +229,21 @@ function shouldHighlightFolder(file) {
   //return HIGHLIGHT_PATTERNS.some(rx => rx.test(name));
 }
 
+function addDesktopRenderInteractions(div, f) {
+  div.onclick = () => toggleSelect(div, f);
+
+  div.ondblclick = () => {
+    if (f.isDir) {
+      loadDir(f.path);
+    } else if (f.type === "image" || f.type === "video") {
+      openPreview(f);
+    }
+  };
+}
+
+
 /* ---------- SELECTION / TOOLBAR ---------- */
-function toggleSelect(el, file) {
+export function toggleSelect(el, file) {
   const idx = selectedItems.indexOf(file);
 
   if (idx >= 0) {
@@ -234,91 +265,53 @@ function updateToolbar() {
   const selectionCount = selectedItems.length;
 
   // ---- Navigation ----
-  bar.appendChild(
-    toolbarButton(
-      "Up",
-      "fas fa-arrow-left",
-      () => loadDir(parentPath),
-      !parentPath
-    )
-  );
+  bar.appendChild(toolbarButton("Up", "fas fa-arrow-left",() => loadDir(parentPath),!parentPath));
 
-  bar.appendChild(
-    toolbarButton(
-      "Refresh",
-      "fas fa-rotate-right",
-      () => loadDir(currentPath)
-    )
-  );
+  bar.appendChild(toolbarButton("Refresh","fas fa-rotate-right",() => loadDir(currentPath)));
 
   // ---- COPY / MOVE ----
   if (clipboardItems.length > 0) {
-    bar.appendChild(
-      toolbarButton(
-        `${clipboardItems.length} item(s)`,
-        "fas fa-clipboard",
-        null,
-        true
-      )
-    );
-
+    bar.appendChild(toolbarButton(`${clipboardItems.length} item(s)`, "fas fa-clipboard", null, true));
     bar.appendChild(toolbarButton("Paste", "fas fa-paste", () => pasteClipboard(false)));
-
     bar.appendChild(toolbarButton("Cancel", "fas fa-times", clearClipboard));
 
     return;
   }
 
-  // ---- Primary actions ----
+  if(isMobile()) {
+    addMobileToolbarButtons(bar, selectionCount);
+  } else {
+    addDesktopToolbarButtons(bar, selectionCount);
+  }
+
+  return;
+}
+
+function addDesktopToolbarButtons(bar, selectionCount) {
+    // ---- Primary actions ----
   if (selectionCount === 0) {
     bar.appendChild(toolbarButton("Upload", "fas fa-upload", uploadFiles));
   } else {
-      bar.appendChild(
-        toolbarButton("Move", "fas fa-arrows-alt", startMove)
-      );
-      bar.appendChild(
-        toolbarButton("Copy", "fas fa-copy", startCopy)
-      );
+    bar.appendChild(toolbarButton("Move", "fas fa-arrows-alt", startMove));
+    bar.appendChild(toolbarButton("Copy", "fas fa-copy", startCopy));
   }
 
   // ---- Context actions ----
   if (selectionCount > 0) {
-    bar.appendChild(
-      toolbarButton(
-        "Download",
-        "fas fa-download",
-        downloadSelected
-      )
-    );
+    bar.appendChild(toolbarButton("Download", "fas fa-download", downloadSelected));
 
-    bar.appendChild(
-      toolbarButton(
-        "Delete",
-        "fas fa-trash",
-        deleteSelected
-      )
-    );
+    bar.appendChild(toolbarButton("Delete", "fas fa-trash", deleteSelected));
   }
 
   if (selectionCount === 1) {
-    bar.appendChild(
-      toolbarButton(
-        "Rename",
-        "fas fa-i-cursor",
-        renameSelected
-      )
-    );
+    bar.appendChild(toolbarButton("Rename", "fas fa-i-cursor", renameSelected));
   }
+
+  bar.appendChild(toolbarButton("New Folder", "fas fa-folder-plus", createNewFolder));
 
   if (selectionCount <= 1) {
-    bar.appendChild(
-      toolbarButton("Properties", "fas fa-circle-info", showPropertiesModal)
-    );
+    bar.appendChild(toolbarButton("Properties", "fas fa-circle-info", showPropertiesModal));
   }
-
-  bar.appendChild(
-    toolbarButton("New Folder", "fas fa-folder-plus", createNewFolder)
-  );
 
   // ---- Show hidden toggle ----
   const hiddenToggle = document.createElement("label");
@@ -345,7 +338,7 @@ function updateToolbar() {
   bar.appendChild(hiddenToggle);
 }
 
-function toolbarButton(label, iconClass, onClick, disabled = false) {
+export function toolbarButton(label, iconClass, onClick, disabled = false) {
   const btn = document.createElement("button");
 
   if (iconClass) {
@@ -366,7 +359,7 @@ function toolbarButton(label, iconClass, onClick, disabled = false) {
   return btn;
 }
 
-async function deleteSelected() {
+export async function deleteSelected() {
   if (!selectedItems.length) return;
 
   if (!confirm(`Delete ${selectedItems.length} item(s)?`)) return;
@@ -391,7 +384,7 @@ async function deleteSelected() {
   });
 }
 
-async function renameSelected() {
+export async function renameSelected() {
   const item = selectedItems[0];
   const newName = prompt("New name:", item.name || item.path.split("/").pop());
 
@@ -470,19 +463,19 @@ function formatSize(bytes) {
   return bytes.toFixed(2) + " " + units[i];
 }
 
-function closePropertiesModal() {
+export function closePropertiesModal() {
   document.getElementById("propertiesModal").classList.add("hidden");
 }
 
 /* ---------- COPY / MOVE ACTIONS ---------- */
-function startCopy() {
+export function startCopy() {
   clipboardItems = [...selectedItems];
   clipboardMode = "copy";
   selectedItems = [];
   updateToolbar();
 }
 
-function startMove() {
+export function startMove() {
   clipboardItems = [...selectedItems];
   clipboardMode = "move";
   selectedItems = [];
@@ -533,7 +526,7 @@ async function pasteClipboard(overwrite = false) {
 }
 
 /* ---------- NEW FOLDER ---------- */
-async function createNewFolder() {
+export async function createNewFolder() {
   const folderName = prompt("Enter folder name:");
   if (!folderName) return;
 
@@ -556,7 +549,7 @@ async function createNewFolder() {
 }
 
 /* ---------- PREVIEW ---------- */
-function openPreview(file) {
+export function openPreview(file) {
   const body = document.getElementById("previewBody");
   body.innerHTML = "";
 

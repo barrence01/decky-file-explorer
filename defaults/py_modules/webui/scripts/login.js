@@ -1,5 +1,22 @@
+import { withLoading, showFileView, showError, showSuccess, 
+         setSelectedItems, setClipboardItems, setClipboardMode, setCurrentPath,
+         selectedItems, clipboardItems, clipboardMode, currentPath } from './app.js';
+
+document.addEventListener("DOMContentLoaded", () => {
+  const hamburger = document.querySelector(".hamburger");
+  const sidePanel = document.getElementById("sidePanel");
+  const mainContent = document.getElementById("mainContent");
+
+  hamburger.addEventListener("click", () => {
+    sidePanel.classList.toggle("visible");
+    mainContent.classList.toggle("shifted");
+  });
+  passwordEnterEvent();
+  checkLogin();
+});
+
 /* ---------- AUTH ---------- */
-async function checkLogin() {
+export async function checkLogin() {
   return withLoading(async () => {
     const res = await fetch("/api/login/is-logged");
 
@@ -13,7 +30,7 @@ async function checkLogin() {
 }
 
 
-async function doLogin() {
+export async function doLogin() {
   return withLoading(async () => {
     const login = document.getElementById("login").value;
     const password = document.getElementById("password").value;
@@ -40,7 +57,7 @@ async function doLogin() {
   });
 }
 
-async function doLogoff() {
+export async function doLogoff() {
   const res = await fetch("/api/logoff", { method: "GET" });
 
   if (!res.ok) {
@@ -49,10 +66,10 @@ async function doLogoff() {
   }
 
   // Clear UI state
-  selectedItems = [];
-  clipboardItems = [];
-  clipboardMode = null;
-  currentPath = null;
+  setSelectedItems([]);
+  setClipboardItems([]);
+  setClipboardMode(null);
+  setCurrentPath(null);
 
   // Hide file view, show login, logoff
   document.getElementById("fileView").style.display = "none";
