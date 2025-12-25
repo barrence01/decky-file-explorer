@@ -5,11 +5,13 @@ from typing import Any
 
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
 SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
-PYTHON_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
+PYTHON_SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
+PYTHON_SCRIPT_DIR2 = Path(decky.DECKY_PLUGIN_DIR) / "py_modules"
 PYTHON_EXTERNAL_LIBS_DIR = Path(decky.DECKY_PLUGIN_DIR) / "bin"
 LOG_DIR = Path(decky.DECKY_PLUGIN_LOG_DIR)
 
-sys.path.insert(0, str(PYTHON_DIR))
+sys.path.insert(0, str(PYTHON_SCRIPT_DIR))
+sys.path.insert(0, str(PYTHON_SCRIPT_DIR2))
 sys.path.insert(0, str(PYTHON_EXTERNAL_LIBS_DIR))
 
 import server
