@@ -1,4 +1,5 @@
-import { hideSidePanel, toolbarButton, withLoading, showSuccess, showError, selectedItems, setSelectedItems } from './app.js';
+import { hideSidePanel, toolbarButton, withLoading, showSuccess, showError,
+         selectedItems, setSelectedItems, clearClipboard } from './app.js';
 
 export async function scanRecordings() {
   return withLoading(async () => {

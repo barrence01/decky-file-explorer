@@ -249,7 +249,7 @@ function addDesktopRenderInteractions(div, f) {
 /* ---------- SELECTION / TOOLBAR ---------- */
 export function toggleSelect(el, file) {
   const idx = selectedItems.indexOf(file);
-
+  
   if (idx >= 0) {
     selectedItems.splice(idx, 1);
     el.classList.remove("selected");
@@ -486,7 +486,7 @@ export function startMove() {
   updateToolbar();
 }
 
-function clearClipboard() {
+export function clearClipboard() {
   clipboardItems = [];
   clipboardMode = null;
   selectedItems = [];
