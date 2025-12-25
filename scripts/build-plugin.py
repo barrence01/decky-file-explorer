@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # build-plugin.py
 
-import os
-import shutil
 import sys
 from pathlib import Path
 import zipfile
@@ -82,7 +80,7 @@ def build_plugin():
     run_pnpm_build(current_dir)
     
     # Define zip file name
-    zip_file_name = "DeckyFileExplorer.zip"
+    zip_file_name = "decky-file-explorer.zip"
     zip_file_path = current_dir / zip_file_name
     
     # Remove existing zip if it exists

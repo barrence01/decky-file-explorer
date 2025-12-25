@@ -12,7 +12,6 @@ from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsErro
 import decky
 import gamerecording
 import subprocess
-import uuid
 
 # Load user's settings
 from shared_settings import get_server_settings_manager, get_credentials_manager
@@ -101,6 +100,7 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
+
 
 def check_credentials():
     login = settings_credentials.getSetting(USERNAME_FIELD)

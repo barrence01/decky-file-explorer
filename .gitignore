@@ -220,3 +220,6 @@ credentials.json
 .decky_plugin_runtime
 compiled
 .deckyloader-mock-env
+DeckyFileExplorer.zip
+decky-file-explorer-*.zip
+bin

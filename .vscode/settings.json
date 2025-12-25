@@ -1,7 +1,8 @@
 {
     "python.analysis.extraPaths": [
         "./defaults/py_modules",
-        "./defaults/py_modules/externals"
+        "./defaults/py_modules/externals",
+        "./bin"
     ],
     "python.testing.pytestArgs": [
         "tests"
