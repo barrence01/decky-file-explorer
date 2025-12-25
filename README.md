@@ -15,11 +15,11 @@ This plugin uses bcrypt lib and it needs to be compiled. There a 2 ways to do it
 1. Install through `pip install bcrypt`
 
 2. Compile using docker:
-    cd /backend/_bcrypt
-    # Build Image
-    sudo docker build -t bcrypt-builder .
-    # Build binary
-    sudo docker run --rm -v "$(pwd)":/backend bcrypt-builder
+    `cd /backend/_bcrypt`
+    ### Build Docker Image
+    `sudo docker build -t bcrypt-builder .`
+    ### Build binary
+    `sudo docker run --rm -v "$(pwd)":/backend bcrypt-builder`
 
     * The output will be on `backend/out`, you need to copy the file to `bin/`
 
