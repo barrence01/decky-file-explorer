@@ -12,10 +12,6 @@ from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsErro
 import decky
 import gamerecording
 import subprocess
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
-
-ph = PasswordHasher()
 
 # Load user's settings
 from shared_settings import get_server_settings_manager, get_credentials_manager
@@ -99,13 +95,11 @@ async def auth_middleware(request, handler):
 
 # Credential
 def hash_password(password: str) -> str:
-    return ph.hash(password)
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode(), salt).decode()
 
 def verify_password(password: str, hashed: str) -> bool:
-    try:
-        return ph.verify(hashed, password)
-    except VerifyMismatchError:
-        return False
+    return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
 def check_credentials():
