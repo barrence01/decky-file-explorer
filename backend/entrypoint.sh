@@ -1,6 +1,8 @@
 #!/bin/sh
 set -ex
 
+python3 --version
+
 cd /backend/_bcrypt
 
 cargo build --release
