@@ -47,7 +47,7 @@ def run_pnpm_build(path: Path):
 def add_directory_to_zip(
     zipf: zipfile.ZipFile,
     base_dir: Path,
-    parent_folder_name: str,
+    root_folder: str,
     dirs_to_ignore: list[str] = [],
     files_to_ignore: list[str] = []
 ):
@@ -60,12 +60,12 @@ def add_directory_to_zip(
             if item.name in dirs_to_ignore:
                 print(f"  ⏭ Skipping directory: {item}")
                 continue
-            add_directory_to_zip(zipf, item, parent_folder_name, dirs_to_ignore, files_to_ignore)
+            add_directory_to_zip(zipf, item, root_folder, dirs_to_ignore, files_to_ignore)
         else:
             if item.name in files_to_ignore:
                 print(f"  ⏭ Skipping file: {item}")
                 continue
-            arcname = f"{parent_folder_name}/{item.relative_to('.')}"
+            arcname = f"{root_folder}/{item.relative_to('.')}"
             zipf.write(item, arcname)
             print(f"  ✓ Added {item}")
 
@@ -75,14 +75,14 @@ def build_plugin():
     
     # Get parent folder name
     current_dir = Path.cwd()
-    parent_folder_name = current_dir.name
-    print(f"Parent folder name: {parent_folder_name}")
+    root_folder = current_dir.name
+    print(f"Parent folder name: {root_folder}")
 
     # Build deckyUI
     run_pnpm_build(current_dir)
     
     # Define zip file name
-    zip_file_name = "decky-file-explorer.zip"
+    zip_file_name = "DeckyFileExplorer.zip"
     zip_file_path = current_dir / zip_file_name
     
     # Remove existing zip if it exists
@@ -116,7 +116,7 @@ def build_plugin():
             file_path = Path(file_name)
             if file_path.exists():
                 # Add file to zip with folder structure
-                zipf.write(file_path, f"{parent_folder_name}/{file_name}")
+                zipf.write(file_path, f"{root_folder}/{file_name}")
                 print(f"  ✓ Added {file_name}")
             else:
                 print(f"  WARNING: {file_name} not found, skipping...")
@@ -133,7 +133,7 @@ def build_plugin():
                 add_directory_to_zip(
                     zipf,
                     dir_path,
-                    parent_folder_name,
+                    root_folder,
                     dirs_to_ignore,
                     files_to_ignore
                 )
