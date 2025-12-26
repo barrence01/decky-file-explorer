@@ -6,9 +6,9 @@ from pathlib import Path
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
 PYTHON_SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
 
-PYTHON_MODULES_DIR = PYTHON_SCRIPT_DIR / "defaults/py_modules"
+PYTHON_MODULES_DIR = PYTHON_SCRIPT_DIR / "py_modules"
 if not PYTHON_MODULES_DIR.exists():
-    PYTHON_MODULES_DIR = PYTHON_SCRIPT_DIR / "py_modules"
+    PYTHON_MODULES_DIR = PYTHON_SCRIPT_DIR / "defaults/py_modules"
 
 PYTHON_BIN_DIR = PYTHON_SCRIPT_DIR / "bin"
 
