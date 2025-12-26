@@ -15,13 +15,14 @@ This plugin uses bcrypt lib and it needs to be compiled. There a 2 ways to add i
 First way: Install through `pip install bcrypt`
 
 Second way: Install using docker:
-    `cd /backend/`
+    
+    cd /backend/
     ### Build Docker Image
-    `sudo docker build -t bcrypt-builder .`
+    sudo docker build -t bcrypt-builder .
     ### Build binary
-    `sudo docker run --rm -v "$(pwd)":/backend bcrypt-builder`
+    sudo docker run --rm -v "$(pwd)":/backend bcrypt-builder
 
-    * The output will be on `backend/out`, you need to copy the file to `bin/` or run `scripts/build-script.sh`
+* The output will be on `backend/out`, you need to copy the file to `bin/` or run `scripts/build-script.sh`
 
 
 # Main menu of the plugin
