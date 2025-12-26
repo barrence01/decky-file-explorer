@@ -26,8 +26,13 @@ from utils import log_exceptions
 
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
 PLUGIN_DIR = Path(decky.DECKY_PLUGIN_DIR)
-BACKEND_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
-WEBUI_DIR = PLUGIN_DIR / "defaults/py_modules/webui"
+
+BACKEND_DIR = PLUGIN_DIR / "py_modules"
+if not BACKEND_DIR.exists():
+    BACKEND_DIR = PLUGIN_DIR / "defaults/py_modules"
+
+WEBUI_DIR = BACKEND_DIR / "webui"
+
 AUTH_COOKIE = "auth_token"
 DEFAULT_PORT = 8082
 DEFAULT_TIMEOUT_IN_SECONDS = 600 # 600s or 10m

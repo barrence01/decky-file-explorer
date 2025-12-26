@@ -5,7 +5,7 @@ import {
   definePlugin,
 } from "@decky/api"
 import { FaServer } from "react-icons/fa";
-import { ServerAPIProvider, useServerAPI } from "./contexts/ServerAPIContext";
+import { ServerAPIProvider } from "./contexts/ServerAPIContext";
 // import { serverAPI } from "./utils/ServerAPI";
 import Content from "./components/Content";
 
