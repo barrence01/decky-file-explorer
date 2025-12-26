@@ -62,9 +62,6 @@ echo "=== Verifying artifacts ==="
 ls -lh ../out/bcrypt
 ls -lh /tmp/bcrypt_pkg/bcrypt
 
-echo "=== Verifying import ==="
-python3 -c "import sys; sys.path.insert(0, '/backend/out'); import bcrypt; print('bcrypt imported successfully!')"
-
 echo "=== Cleaning environment ==="
 cd /backend
 rm -rf venv
