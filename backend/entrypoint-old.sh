@@ -9,6 +9,23 @@ TARGET=""
 echo "Architecture : $ARCH"
 echo "Bitness      : $BITS-bit"
 
+case "$ARCH" in
+  x86_64)
+    TARGET="x86_64-unknown-linux-gnu"
+    ;;
+  i686|i386)
+    TARGET="i686-unknown-linux-gnu"
+    ;;
+  aarch64)
+    TARGET="aarch64-unknown-linux-gnu"
+    ;;
+  *)
+    echo "Unsupported architecture: $ARCH"
+    TARGET="x86_64-unknown-linux-gnu"
+    echo "Setting architecture to default: $TARGET"
+    ;;
+esac
+
 echo "=== Checking Python version ==="
 python3 --version
 
@@ -32,16 +49,24 @@ fi
 
 python3 -m pip install maturin
 
+echo "=== Rust version ==="
+rustc --version
+
 # --------------------------------------------------
 # Build
 # --------------------------------------------------
 
+echo "=== Installing system dependencies ==="
+cd /backend/_bcrypt
+
 echo "=== Getting python executable ==="
 export PYTHON_SYS_EXECUTABLE=$(which python3)
 
-echo "=== Install bcrypt ==="
-python3 -m pip install bcrypt --no-deps --target /tmp/bcrypt_pkg
-
+echo "=== Building Rust extension ==="
+maturin build \
+  --release \
+  --compatibility manylinux_2_28 \
+  --target "$TARGET"
 
 # --------------------------------------------------
 # Output
@@ -52,20 +77,20 @@ mkdir -p ../out/bcrypt
 realpath ../out/bcrypt
 
 echo "=== Copying Python package files ==="
-cp -r /tmp/bcrypt_pkg/bcrypt ../out/
+cp -r ../bcrypt/* ../out/bcrypt/
+
+echo "=== Copying compiled binary ==="
+cp "target/$TARGET/release/libbcrypt_rust.so" \
+   "../out/bcrypt/_bcrypt.abi3.so"
 
 # --------------------------------------------------
 # Verification
 # --------------------------------------------------
 
 echo "=== Verifying artifacts ==="
+ls -lh target/release
+ls -lh target/release/build
 ls -lh ../out/bcrypt
-ls -lh /tmp/bcrypt_pkg/bcrypt
-
-echo "=== Cleaning environment ==="
-cd /backend
-rm -rf venv
-rm -rf /tmp/bcrypt_pkg/bcrypt
 
 echo "=== Verifying import ==="
 python3 -c "import sys; sys.path.insert(0, '/backend/out'); import bcrypt; print('bcrypt imported successfully!')"
