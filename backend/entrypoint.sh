@@ -43,7 +43,7 @@ echo "=== Preparing output folder ==="
 mkdir -p /tmp/bcrypt_pkg
 mkdir -p ./out/bcrypt
 realpath ./out/bcrypt
-cp -r ../bcrypt/* ../out/bcrypt/
+cp -r ./bcrypt/* ./out/bcrypt/
 
 echo "=== Install bcrypt ==="
 python3 -m pip install bcrypt --no-deps --target /tmp/bcrypt_pkg
