@@ -1,5 +1,7 @@
 #!/bin/sh
-set -eux
+set -eu
+
+cd /backend/
 
 echo "=== Detecting system architecture ==="
 ARCH=$(uname -m)
@@ -27,10 +29,8 @@ else
 
     echo "setting python venv"
     python -m venv venv
-    source venv/bin/activate
+    source ./venv/bin/activate
 fi
-
-python3 -m pip install maturin
 
 # --------------------------------------------------
 # Build
@@ -38,6 +38,10 @@ python3 -m pip install maturin
 
 echo "=== Getting python executable ==="
 export PYTHON_SYS_EXECUTABLE=$(which python3)
+
+echo "=== Preparing output folder ==="
+mkdir -p /tmp/bcrypt_pkg
+mkdir -p ./out/bcrypt
 
 echo "=== Install bcrypt ==="
 python3 -m pip install bcrypt --no-deps --target /tmp/bcrypt_pkg
@@ -47,24 +51,19 @@ python3 -m pip install bcrypt --no-deps --target /tmp/bcrypt_pkg
 # Output
 # --------------------------------------------------
 
-echo "=== Preparing output folder ==="
-mkdir -p ../out/bcrypt
-realpath ../out/bcrypt
-
 echo "=== Copying Python package files ==="
-cp -r /tmp/bcrypt_pkg/bcrypt ../out/
+cp -r /tmp/bcrypt_pkg/bcrypt/* ./out/bcrypt/
 
 # --------------------------------------------------
 # Verification
 # --------------------------------------------------
 
 echo "=== Verifying artifacts ==="
-ls -lh ../out/bcrypt
+ls -lh ./out/bcrypt
 ls -lh /tmp/bcrypt_pkg/bcrypt
 
 echo "=== Cleaning environment ==="
-cd /backend
-rm -rf venv
+rm -rf ./venv
 rm -rf /tmp/bcrypt_pkg/bcrypt
 
 echo "=== Build complete ==="
