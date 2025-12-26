@@ -35,7 +35,7 @@ Issues = "https://github.com/barrence01/decky-file-explorer/issues"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-where = ["defaults","py_modules"]
+where = ["defaults","py_modules","bin"]
 include = ["decky_file_explorer*"] 
 
 [tool.setuptools.package-data]

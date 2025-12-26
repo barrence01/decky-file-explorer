@@ -120,7 +120,7 @@ def build_plugin():
                 print(f"  WARNING: {file_name} not found, skipping...")
         
         # Copy directories
-        directories_to_copy = ["dist", "bin", "defaults", "backend"]
+        directories_to_copy = ["dist", "bin", "defaults"]
         files_to_ignore = []
         dirs_to_ignore = ["__pycache__"]
 

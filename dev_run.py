@@ -4,23 +4,25 @@ import sys
 from pathlib import Path
 
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
-SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
-PYTHON_SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
-PYTHON_SCRIPT_DIR2 = Path(decky.DECKY_PLUGIN_DIR) / "py_modules"
-PYTHON_EXTERNAL_LIBS_DIR = Path(decky.DECKY_PLUGIN_DIR) / "bin"
+PYTHON_SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
+
+PYTHON_MODULES_DIR = PYTHON_SCRIPT_DIR / "defaults/py_modules"
+if not PYTHON_MODULES_DIR.exists():
+    PYTHON_MODULES_DIR = PYTHON_SCRIPT_DIR / "py_modules"
+
+PYTHON_BIN_DIR = PYTHON_SCRIPT_DIR / "bin"
+
 LOG_DIR = Path(decky.DECKY_PLUGIN_LOG_DIR)
+
 sys.path.insert(0, str(PYTHON_SCRIPT_DIR))
-sys.path.insert(0, str(PYTHON_SCRIPT_DIR2))
-sys.path.insert(0, str(PYTHON_EXTERNAL_LIBS_DIR))
+sys.path.insert(0, str(PYTHON_MODULES_DIR))
+sys.path.insert(0, str(PYTHON_BIN_DIR))
 
 import asyncio
 from server import WebServer
 
-SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
 settings_server = SettingsManager(name="server_settings", settings_directory=SETTINGS_DIR)
 settings_server.read()
-
-DIR_PATH = Path(decky.DECKY_PLUGIN_DIR)
 
 async def main():
     web_server = WebServer()

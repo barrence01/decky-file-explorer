@@ -4,15 +4,19 @@ from pathlib import Path
 from typing import Any
 
 SETTINGS_DIR = Path(decky.DECKY_PLUGIN_SETTINGS_DIR)
-SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
-PYTHON_SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR) / "defaults/py_modules"
-PYTHON_SCRIPT_DIR2 = Path(decky.DECKY_PLUGIN_DIR) / "py_modules"
-PYTHON_EXTERNAL_LIBS_DIR = Path(decky.DECKY_PLUGIN_DIR) / "bin"
+PYTHON_SCRIPT_DIR = Path(decky.DECKY_PLUGIN_DIR)
+
+PYTHON_MODULES_DIR = PYTHON_SCRIPT_DIR / "defaults/py_modules"
+if not PYTHON_MODULES_DIR.exists():
+    PYTHON_MODULES_DIR = PYTHON_SCRIPT_DIR / "py_modules"
+
+PYTHON_BIN_DIR = PYTHON_SCRIPT_DIR / "bin"
+
 LOG_DIR = Path(decky.DECKY_PLUGIN_LOG_DIR)
 
 sys.path.insert(0, str(PYTHON_SCRIPT_DIR))
-sys.path.insert(0, str(PYTHON_SCRIPT_DIR2))
-sys.path.insert(0, str(PYTHON_EXTERNAL_LIBS_DIR))
+sys.path.insert(0, str(PYTHON_MODULES_DIR))
+sys.path.insert(0, str(PYTHON_BIN_DIR))
 
 import server
 from server import WebServer      

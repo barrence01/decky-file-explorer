@@ -1,16 +1,9 @@
 import {
-  ButtonItem,
-  PanelSection,
-  PanelSectionRow,
   staticClasses
 } from "@decky/ui";
 import {
-  addEventListener, 
-  removeEventListener,
   definePlugin,
-  toaster,
 } from "@decky/api"
-import { useState, useEffect } from "react";
 import { FaServer } from "react-icons/fa";
 import { ServerAPIProvider, useServerAPI } from "./contexts/ServerAPIContext";
 // import { serverAPI } from "./utils/ServerAPI";

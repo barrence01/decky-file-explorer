@@ -1,20 +1,71 @@
 #!/bin/sh
-set -ex
+set -eu
 
-cd /backend/_bcrypt
+cd /backend/
 
-cargo build --release
+echo "=== Detecting system architecture ==="
+ARCH=$(uname -m)
+BITS=$(getconf LONG_BIT)
+TARGET=""
 
-mkdir -p ../out/bcrypt
-realpath ../out/bcrypt
+echo "Architecture : $ARCH"
+echo "Bitness      : $BITS-bit"
 
-cp -r ../bcrypt/* ../out/bcrypt/
+echo "=== Checking Python version ==="
+python3 --version
 
-ls -lh /backend/out/bcrypt
+if python3 -m pip --version >/dev/null 2>&1; then
+  echo "pip is available"
+else
+  echo "pip not found"
+  echo "installing pip"
+    pacman -Sy --noconfirm \
+    python \
+    python-pip \
+    python-setuptools \
+    python-wheel
 
-ls target/release
+    python3 -m pip --version
 
-cp target/release/libbcrypt_rust.so ../out/bcrypt/_bcrypt.abi3.so
+    echo "setting python venv"
+    python -m venv venv
+    source ./venv/bin/activate
+fi
+
+# --------------------------------------------------
+# Build
+# --------------------------------------------------
+
+echo "=== Getting python executable ==="
+export PYTHON_SYS_EXECUTABLE=$(which python3)
+
+echo "=== Preparing output folder ==="
+mkdir -p /tmp/bcrypt_pkg
+mkdir -p ./out/bcrypt
+realpath ./out/bcrypt
+cp -r ./bcrypt/* ./out/bcrypt/
+
+echo "=== Install bcrypt ==="
+python3 -m pip install bcrypt --no-deps --target /tmp/bcrypt_pkg
+
+
+# --------------------------------------------------
+# Output
+# --------------------------------------------------
+
+echo "=== Copying Python package files ==="
+cp -r /tmp/bcrypt_pkg/bcrypt/* ./out/bcrypt/
+
+# --------------------------------------------------
+# Verification
+# --------------------------------------------------
+
+echo "=== Verifying artifacts ==="
+ls -lh ./out/bcrypt
+ls -lh /tmp/bcrypt_pkg/bcrypt
+
+echo "=== Cleaning environment ==="
+rm -rf ./venv
+rm -rf /tmp
 
 echo "=== Build complete ==="
-ls -lh ../out/bcrypt

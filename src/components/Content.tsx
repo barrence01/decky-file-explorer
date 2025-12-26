@@ -3,9 +3,7 @@ import {
   ButtonItem,
   PanelSection,
   PanelSectionRow,
-  ToggleField,
-  showModal,
-  TextField,
+  showModal
 } from "@decky/ui";
 import { useServerAPI } from "../contexts/ServerAPIContext";
 import { QRCodeSVG } from 'qrcode.react';

@@ -20,18 +20,18 @@
     "fileexplorer"
   ],
   "author": "Will B. <barrence.santos@gmail.com>",
-  "license": "MIT",
+  "license": "BSD-3-Clause",
   "bugs": {
     "url": "https://github.com/barrence01/decky-file-explorer/issues"
   },
   "licenses": [
     {
-      "type": "MIT",
-      "url": "https://opensource.org/license/mit"
+      "type": "BSD-3-Clause",
+      "url": "https://opensource.org/license/bsd-3-clause"
     }
   ],
   "additionalLicenses": {
-    "deckyfileexplorer": "MIT"
+    "deckyfileexplorer": "BSD-3-Clause"
   },
   "homepage": "https://github.com/barrence01/decky-file-explorer",
   "devDependencies": {
