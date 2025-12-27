@@ -66,6 +66,6 @@ ls -lh /tmp/bcrypt_pkg/bcrypt
 
 echo "=== Cleaning environment ==="
 rm -rf ./venv
-rm -rf /tmp
+rm -rf ./tmp
 
 echo "=== Build complete ==="
