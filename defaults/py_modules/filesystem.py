@@ -65,7 +65,9 @@ def get_external_mountpoints():
 
 def is_path_on_linux_root_and_not_external_or_not_user_space(path: Path, base_dir:Path) -> bool:
 
-    result = False
+    is_external = True
+
+    is_user_space = True
 
     allowed_mount_roots = (
         Path("/mnt"),
@@ -78,12 +80,12 @@ def is_path_on_linux_root_and_not_external_or_not_user_space(path: Path, base_di
     print(get_external_drives())
 
     if not any(path.is_relative_to(m) for m in allowed_mount_roots) or not any(path.is_relative_to(m) for m in external_mounts):
-        result = True
+        is_external = False
 
     if not path.is_relative_to(base_dir or Path(os.path.expanduser("~"))):
-        result = True
+        is_user_space = False
     
-    return result
+    return is_external or is_user_space
 
 # =========================
 # File System Object
@@ -226,7 +228,7 @@ class FileSystemService:
         # ============================
         # WINDOWS
         # ============================
-        if os.name == "nt":
+        if os.name == "ntt":
             if is_path_on_c_drive(p) and not p.is_relative_to(self.base_dir):
                 raise FileSystemError("Access to main drive (C:) is forbidden")
             
