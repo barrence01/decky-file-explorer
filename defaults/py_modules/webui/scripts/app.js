@@ -130,9 +130,9 @@ function getParentPath(path) {
   
   const parts = path.replaceAll("\\","/").replace(/\/+$/, "").split("/");
 
-  if(path.includes(":")) {
-    if (parts.length <= 2) return null;
-  } else {
+  if(path.includes("C:")) {
+    if (parts.length <= 3) return null;
+  } else if(path != "/media" && path != "/mnt") {
     if (parts.length <= 3) return null;
   }
 
@@ -146,7 +146,7 @@ export function showFileView() {
   loadDir();
 }
 
-export async function loadDir(path = null) {
+export async function loadDir(path = "F:") {
   return withLoading(async () => {
     hideSidePanel();
     selectedItems = [];
@@ -159,13 +159,18 @@ export async function loadDir(path = null) {
 
     const data = await res.json();
 
-    selectedDir = data.selectedDir;
-    currentPath = data.selectedDir.path;
+    if(res.ok) {
+      selectedDir = data.selectedDir;
+      currentPath = data.selectedDir.path;
 
-    document.getElementById("breadcrumb").innerText = currentPath;
+      document.getElementById("breadcrumb").innerText = currentPath;
 
-    updateToolbar();
-    renderFiles(data.dirContent);
+      updateToolbar();
+      renderFiles(data.dirContent);
+    } else {
+      showError(data.error);
+      loadDir(null);
+    }
   });
 }
 

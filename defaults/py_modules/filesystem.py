@@ -20,7 +20,24 @@ class FileSystemError(Exception):
 class FileAlreadyExistsError(Exception):
     pass
 
+# =========================
+# Utils
+# =========================
+def is_path_on_c_root(path: Path) -> bool:
+    p = path.resolve()
+    return p.drive.upper() == "C:" and p.parent == p
 
+def is_path_on_c_drive(path: Path) -> bool:
+    p = path.resolve()
+    return p.drive.upper() == "C:"
+
+def is_path_on_linux_root(path: Path, base_dir:Path) -> bool:
+    allowed_mounts = (Path("/mnt"), Path("/media"))
+
+    if not any(path.is_relative_to(m) for m in allowed_mounts) or not path.is_relative_to(base_dir or Path(os.path.expanduser("~"))):
+        return False
+    
+    return True
 
 # =========================
 # File System Object
@@ -160,10 +177,20 @@ class FileSystemService:
             # Relative paths are always relative to base_dir
             p = (self.base_dir / raw).resolve()
 
-        # Enforce sandbox
-        if not p.is_relative_to(self.base_dir):
-            raise FileSystemError("Access outside base directory is forbidden")
-
+        # ============================
+        # WINDOWS
+        # ============================
+        if os.name == "nt":
+            if is_path_on_c_drive(p) and not p.is_relative_to(self.base_dir):
+                raise FileSystemError("Access to main drive (C:) is forbidden")
+            
+        # ============================
+        # LINUX / UNIX
+        # ============================
+        else:
+            if is_path_on_linux_root(p, self.base_dir):
+                raise FileSystemError("Access to root filesystem is forbidden")         
+            
         return p
 
 
