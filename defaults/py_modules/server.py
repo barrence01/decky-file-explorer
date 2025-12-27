@@ -1,7 +1,7 @@
 import aiohttp
 from aiohttp import ClientConnectionResetError, web, BodyPartReader, MultipartReader
 from pathlib import Path
-from typing import Union
+from typing import Any, Union
 import asyncio
 import secrets
 import mimetypes
@@ -14,7 +14,7 @@ import gamerecording
 import subprocess
 
 # Load user's settings
-from shared_settings import get_server_settings_manager, get_credentials_manager
+from shared_settings import get_server_settings_manager, get_credentials_manager, get_credentials_settings, get_server_settings
 settings_credentials = get_credentials_manager()
 settings_server = get_server_settings_manager()
 
@@ -34,16 +34,21 @@ if not BACKEND_DIR.exists():
 WEBUI_DIR = BACKEND_DIR / "webui"
 
 AUTH_COOKIE = "auth_token"
+AUTH_TOKEN_FIELD = "auth_tokens"
+
 DEFAULT_PORT = 8082
-DEFAULT_TIMEOUT_IN_SECONDS = 600 # 600s or 10m
+DEFAULT_HOST = "0.0.0.0"
+DEFAULT_TIMEOUT_IN_SECONDS = 600
 PASSWORD_FIELD = "password_hash"
 USERNAME_FIELD = "user_login"
+MAX_LOGIN_ATTEMPT_FIELD = "login_attempt"
+
 BASE_DIR_FIELD = "base_dir"
 PORT_FIELD = "port"
 HOST_FIELD = "host"
-MAX_LOGIN_ATTEMPT_FIELD = "login_attempt"
-AUTH_TOKEN_FIELD = "auth_tokens"
-DEFAULT_TIMEOUT_FIELD = "shutdown_timeout_seconds"
+SHUTDOWN_TIMEOUT_FIELD = "shutdown_timeout_seconds"
+
+
 
 # =========================
 # Exceptions
@@ -51,7 +56,6 @@ DEFAULT_TIMEOUT_FIELD = "shutdown_timeout_seconds"
 
 class PortAlreadyInUseError(Exception):
     pass
-
 
 # =========================
 # Middleware
@@ -98,14 +102,12 @@ async def auth_middleware(request, handler):
 # Util methods
 # =========================
 
-# Credential
 def hash_password(password: str) -> str:
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(password.encode(), salt).decode()
 
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
-
 
 def check_credentials():
     login = settings_credentials.getSetting(USERNAME_FIELD)
@@ -115,56 +117,53 @@ def check_credentials():
     if(password is None or password.strip() == ''):
         settings_credentials.setSetting(PASSWORD_FIELD, hash_password("admin"))
 
+def check_server_settings():
+    host = settings_server.getSetting(HOST_FIELD)
+    if host is None or host == "":
+        settings_server.setSetting(HOST_FIELD, DEFAULT_HOST)
+        
+    port = settings_server.getSetting(PORT_FIELD)
+    if port is None or port == "":
+        settings_server.setSetting(PORT_FIELD, DEFAULT_PORT)
+
+    base_dir = settings_server.getSetting(BASE_DIR_FIELD)
+    if base_dir is None or base_dir == "":
+        settings_server.setSetting(BASE_DIR_FIELD, os.path.expanduser("~"))
+
+    shutdown_timeout = int(settings_server.getSetting(SHUTDOWN_TIMEOUT_FIELD) or DEFAULT_TIMEOUT_IN_SECONDS)
+    if shutdown_timeout is None or shutdown_timeout == "":
+        settings_server.setSetting(SHUTDOWN_TIMEOUT_FIELD, DEFAULT_TIMEOUT_IN_SECONDS)
+
+def increase_login_attempt_count() -> int:
+    server_settings = get_credentials_settings()
+    login_attempt_count = server_settings.get_login_attempts() + 1
+    settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, login_attempt_count)
+    return login_attempt_count
+
+def reset_login_attempt_count() -> int:
+    settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, 0)
+    return 0
+
 def reset_settings():
     settings_credentials.setSetting(USERNAME_FIELD, "admin")
     settings_credentials.setSetting(PASSWORD_FIELD, hash_password("admin"))
     settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, 0)
     settings_server.setSetting(PORT_FIELD, DEFAULT_PORT)
     settings_server.setSetting(BASE_DIR_FIELD, os.path.expanduser("~"))
-    settings_server.setSetting(DEFAULT_TIMEOUT_FIELD, DEFAULT_TIMEOUT_IN_SECONDS)
+    settings_server.setSetting(SHUTDOWN_TIMEOUT_FIELD, DEFAULT_TIMEOUT_IN_SECONDS)
 
 # -------------------------------------------------------------------------------
 
 def get_file_system_service() -> FileSystemService:
+    server_settings = get_server_settings()
+    print(server_settings.get_base_dir())
     fs = None
     try:
-        fs = FileSystemService(get_base_dir())
+        fs = FileSystemService(server_settings.get_base_dir())
     except FileSystemError as e:
-        decky.logger.exception(f"The directory {get_base_dir()} doesn't exist, fallback to {os.path.expanduser('~')}")
+        decky.logger.exception(f"The directory {server_settings.get_base_dir()} doesn't exist, fallback to {os.path.expanduser('~')}")
         fs = FileSystemService(os.path.expanduser("~"))
     return fs
-
-def check_server_settings():
-    if not settings_server.getSetting(BASE_DIR_FIELD):
-        settings_server.setSetting(BASE_DIR_FIELD, os.path.expanduser("~"))
-    if not settings_server.getSetting(PORT_FIELD):
-        settings_server.setSetting(PORT_FIELD, DEFAULT_PORT)
-
-def get_base_dir() -> str:
-    base_dir = settings_server.getSetting(BASE_DIR_FIELD)
-    if not base_dir:
-        base_dir = os.path.expanduser("~")
-        settings_server.setSetting(BASE_DIR_FIELD, base_dir)
-    return base_dir
-
-def get_host_from_settings() -> str:
-    decky.logger.info("Getting host from settings: " + str(settings_server.getSetting(PORT_FIELD) or DEFAULT_PORT))
-    return settings_server.getSetting(HOST_FIELD) or "0.0.0.0"
-
-def get_port_from_settings() -> int:
-    decky.logger.info("Getting port from settings: " + str(settings_server.getSetting(PORT_FIELD) or DEFAULT_PORT))
-    return settings_server.getSetting(PORT_FIELD) or DEFAULT_PORT
-
-def get_time_to_shutdown_timeout() -> int:
-    """
-    Returns inactivity timeout in seconds.
-    Can be changed dynamically via settings.
-    """
-    timeout = int(settings_server.getSetting(DEFAULT_TIMEOUT_FIELD) or 0)
-    if not timeout:
-        timeout = DEFAULT_TIMEOUT_IN_SECONDS
-        settings_server.setSetting(DEFAULT_TIMEOUT_FIELD, timeout)
-    return timeout
 
 def get_videos_dir() -> Path:
     videos = Path.home() / "Videos"
@@ -175,8 +174,8 @@ class WebServer:
     def __init__(
         self,
         fs: FileSystemService = get_file_system_service(),
-        host=get_host_from_settings(),
-        port=get_port_from_settings()
+        host=get_server_settings().get_host(),
+        port=get_server_settings().get_port()
     ):
         self.webui_dir = WEBUI_DIR
         self.fs = fs
@@ -197,6 +196,8 @@ class WebServer:
         self._shutdown_task: asyncio.Task | None = None
 
         check_credentials()
+        check_server_settings()
+
         self._setup_routes()
         self._setup_static()
 
@@ -248,22 +249,20 @@ class WebServer:
         if not input_login or not input_password:
             raise web.HTTPBadRequest(reason="Missing credentials")
         
-        login_attempt = int(settings_credentials.getSetting(MAX_LOGIN_ATTEMPT_FIELD) or 0)
-        if login_attempt > 10:
-            decky.logger.warning(f"The account has been locked for excess of attempts. This is attempt number {login_attempt}")
+        stored_credentials = get_credentials_settings()
+        login_attempt_count = increase_login_attempt_count()
+
+        if login_attempt_count > 10:
+            decky.logger.warning(f"The account has been locked for excess of attempts. This is attempt number {login_attempt_count}")
             return web.json_response(
                     {"error": "The account has been locked, please change the password and try again."},
                     status=403)
 
-        stored_login = str(settings_credentials.getSetting(USERNAME_FIELD))
-        stored_password = str(settings_credentials.getSetting(PASSWORD_FIELD)) # type: ignore
-
-        if (input_login != stored_login) or (not verify_password(input_password, stored_password)):
-            settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, login_attempt + 1)
+        if (input_login != stored_credentials.get_username()) or (not verify_password(input_password, stored_credentials.get_password_hash())):
             decky.logger.warning(f"Failed attempt to login in webUI")
             raise web.HTTPUnauthorized(reason="Wrong credential")
+        reset_login_attempt_count()
 
-        settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, 0)
         token = secrets.token_urlsafe(32)
         self.app[AUTH_TOKEN_FIELD].add(token)
 
@@ -291,7 +290,9 @@ class WebServer:
     
     @log_exceptions
     async def is_logged(self, request):
-        # If middleware let it pass, user is logged
+        """
+        Returns logged as true if user is still logged on
+        """
         return web.json_response({"logged": True})
 
     # --------------------
@@ -301,15 +302,16 @@ class WebServer:
         return web.json_response({"status": "ok"})
 
     @log_exceptions
-    async def list_dir(self, request):
+    async def list_dir(self, request: web.Request):
+        server_settings = get_server_settings()
         try:
             data = await request.json()
-            path = data.get("path", get_base_dir())
+            path = data.get("path")
         except Exception:
-            path = get_base_dir()
+            path = server_settings.get_base_dir()
 
         if not path:
-            path = get_base_dir()
+            path = server_settings.get_base_dir()
 
         try:
             selected_dir = self.fs.get_object(path)
@@ -713,10 +715,11 @@ class WebServer:
     async def start(self):
         decky.logger.info("Starting webUI server.")
         try:
+            server_settings = get_server_settings()
             self.runner = web.AppRunner(self.app)
             await self.runner.setup()
-            self.host = get_host_from_settings()
-            self.port = get_port_from_settings()
+            self.host = server_settings.get_host()
+            self.port = server_settings.get_port()
             self.site = web.TCPSite(
                 self.runner,
                 host=self.host,
@@ -771,7 +774,7 @@ class WebServer:
             while True:
                 await asyncio.sleep(5)
 
-                timeout = get_time_to_shutdown_timeout()
+                timeout = get_server_settings().get_shutdown_timeout()
                 now = loop.time()
 
                 inactive_for = now - self._last_activity

@@ -23,8 +23,8 @@ export class ServerAPIService {
   private stopFileExplorer = callable<[], ApiResponse<ServerStatus>>("stop_file_explorer");
   
   // Settings methods
-  private getServerSetting = callable<[key: string], ApiResponse>("get_server_setting");
-  private getCredentialSetting = callable<[key: string], ApiResponse>("get_credential_setting");
+  private getServerSetting = callable<[key: string], ApiResponse>("get_webui_setting");
+  private getCredentialSetting = callable<[key: string], ApiResponse>("get_login_setting");
   private saveServerUsername = callable<[value: string], ApiResponse>("save_user_username");
   private saveServerUserPassword = callable<[value: string], ApiResponse>("save_user_password");
   private saveServerSettings = callable<[key: string, value: any], ApiResponse>("save_server_settings");
