@@ -5,7 +5,7 @@ import mimetypes
 from aiohttp import web
 import zipfile
 import io
-import os
+import os, subprocess, json
 
 DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
 
@@ -23,6 +23,7 @@ class FileAlreadyExistsError(Exception):
 # =========================
 # Utils
 # =========================
+
 def is_path_on_c_root(path: Path) -> bool:
     p = path.resolve()
     return p.drive.upper() == "C:" and p.parent == p
@@ -31,13 +32,58 @@ def is_path_on_c_drive(path: Path) -> bool:
     p = path.resolve()
     return p.drive.upper() == "C:"
 
-def is_path_on_linux_root(path: Path, base_dir:Path) -> bool:
-    allowed_mounts = (Path("/mnt"), Path("/media"))
+# ----- LINUX ----- 
+def get_external_drives():
+    result = subprocess.run(
+        ["lsblk", "-J", "-o", "NAME,TYPE,RM,SIZE,MOUNTPOINT,FSTYPE,TRAN"],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+    data = json.loads(result.stdout)
+    return data["blockdevices"]
 
-    if not any(path.is_relative_to(m) for m in allowed_mounts) or not path.is_relative_to(base_dir or Path(os.path.expanduser("~"))):
-        return False
+def _walk_blockdevices(devices):
+    """Flatten lsblk tree"""
+    for dev in devices:
+        yield dev
+        for child in dev.get("children", []):
+            yield from _walk_blockdevices([child])
+
+def get_external_mountpoints():
+    mounts = set()
+
+    for dev in _walk_blockdevices(get_external_drives()):
+        mount = dev.get("mountpoint")
+        if not mount:
+            continue
+
+        if dev.get("rm") or dev.get("tran") in ("usb", "mmc"):
+            mounts.add(Path(mount))
+
+    return mounts
+
+def is_path_on_linux_root_and_not_external_or_not_user_space(path: Path, base_dir:Path) -> bool:
+
+    result = False
+
+    allowed_mount_roots = (
+        Path("/mnt"),
+        Path("/media"),
+        Path("/var/media"),
+        Path("/var/mnt")
+    )
+
+    external_mounts = get_external_mountpoints()
+    print(get_external_drives())
+
+    if not any(path.is_relative_to(m) for m in allowed_mount_roots) or not any(path.is_relative_to(m) for m in external_mounts):
+        result = True
+
+    if not path.is_relative_to(base_dir or Path(os.path.expanduser("~"))):
+        result = True
     
-    return True
+    return result
 
 # =========================
 # File System Object
@@ -188,7 +234,7 @@ class FileSystemService:
         # LINUX / UNIX
         # ============================
         else:
-            if is_path_on_linux_root(p, self.base_dir):
+            if is_path_on_linux_root_and_not_external_or_not_user_space(p, self.base_dir):
                 raise FileSystemError("Access to root filesystem is forbidden")         
             
         return p
