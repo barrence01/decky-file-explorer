@@ -13,7 +13,7 @@
     "python.useEnvironmentsExtension": true ,
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
-    "python.languageServer": "Jedi",
+    "python.languageServer": "Pylance",
     "python.analysis.typeCheckingMode": "standard",
     "python.analysis.diagnosticSeverityOverrides": {
         "reportOptionalMemberAccess": "none"
@@ -29,5 +29,12 @@
         "./bin"
     ],
     "python.createEnvironment.contentButton": "show",
-    "editor.defaultFormatter": "ms-python.python"
+    "editor.defaultFormatter": "ms-python.python",
+    "code-runner.executorMap": {
+            "shellscript": "bash",
+            "python": "python",
+            "javascript": "node"
+        },
+    "code-runner.runInTerminal": true,
+    "terminal.integrated.defaultProfile.windows": "Git Bash"
 }
