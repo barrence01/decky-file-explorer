@@ -146,7 +146,7 @@ export function showFileView() {
   loadDir();
 }
 
-export async function loadDir(path = "F:") {
+export async function loadDir(path = null) {
   return withLoading(async () => {
     hideSidePanel();
     selectedItems = [];
