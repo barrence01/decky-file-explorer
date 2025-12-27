@@ -7,11 +7,27 @@
     "python.testing.pytestArgs": [
         "tests"
     ],
+    "editor.semanticTokenColorCustomizations": {
+        "enabled": true
+    },
+    "python.useEnvironmentsExtension": true ,
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
-    "python.languageServer": "Default",
+    "python.languageServer": "Jedi",
     "python.analysis.typeCheckingMode": "standard",
     "python.analysis.diagnosticSeverityOverrides": {
         "reportOptionalMemberAccess": "none"
-    }
+    },
+    "python.experiments.optInto": [
+        "pythonDiscoveryUsingWorkers"
+    ],
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "debugpy.showPythonInlineValues": true,
+    "python.autoComplete.extraPaths": [
+        "./defaults/py_modules",
+        "./defaults/py_modules/externals",
+        "./bin"
+    ],
+    "python.createEnvironment.contentButton": "show",
+    "editor.defaultFormatter": "ms-python.python"
 }
