@@ -50,7 +50,7 @@ def _walk_blockdevices(devices):
         for child in dev.get("children", []):
             yield from _walk_blockdevices([child])
 
-def get_external_mountpoints():
+def get_external_mountpoints() -> set[Path]:
     mounts = set()
 
     for dev in _walk_blockdevices(get_external_drives()):
@@ -65,9 +65,9 @@ def get_external_mountpoints():
 
 def is_path_on_linux_root_and_not_external_or_not_user_space(path: Path, base_dir:Path) -> bool:
 
-    is_external = True
+    is_external = False
 
-    is_user_space = True
+    is_user_space = False
 
     allowed_mount_roots = (
         Path("/mnt"),
@@ -77,15 +77,14 @@ def is_path_on_linux_root_and_not_external_or_not_user_space(path: Path, base_di
     )
 
     external_mounts = get_external_mountpoints()
-    print(get_external_drives())
 
-    if not any(path.is_relative_to(m) for m in allowed_mount_roots) or not any(path.is_relative_to(m) for m in external_mounts):
-        is_external = False
+    if any(path.is_relative_to(m) for m in allowed_mount_roots) or any(path.is_relative_to(m) for m in external_mounts):
+        is_external = True
 
-    if not path.is_relative_to(base_dir or Path(os.path.expanduser("~"))):
-        is_user_space = False
+    if path.is_relative_to(base_dir or Path(os.path.expanduser("~"))):
+        is_user_space = True
     
-    return is_external or is_user_space
+    return not (is_external or is_user_space)
 
 # =========================
 # File System Object
