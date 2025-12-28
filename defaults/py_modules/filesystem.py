@@ -227,7 +227,7 @@ class FileSystemService:
         # ============================
         # WINDOWS
         # ============================
-        if os.name == "ntt":
+        if os.name == "nt":
             if is_path_on_c_drive(p) and not p.is_relative_to(self.base_dir):
                 raise FileSystemError("Access to main drive (C:) is forbidden")
             

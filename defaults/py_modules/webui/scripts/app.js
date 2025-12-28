@@ -130,10 +130,11 @@ function getParentPath(path) {
   
   const parts = path.replaceAll("\\","/").replace(/\/+$/, "").split("/");
 
-  if(path.includes("C:")) {
+  if(path.includes("C:") || path.includes("/home/decky")) {
     if (parts.length <= 3) return null;
-  } else if(path != "/media" && path != "/mnt") {
-    if (parts.length <= 3) return null;
+  }
+  else if(path.includes(":") && parts.length <= 1) {
+    return null;
   }
 
   parts.pop();
@@ -146,7 +147,7 @@ export function showFileView() {
   loadDir();
 }
 
-export async function loadDir(path = "F:") {
+export async function loadDir(path = "F:\\") {
   return withLoading(async () => {
     hideSidePanel();
     selectedItems = [];
@@ -169,7 +170,9 @@ export async function loadDir(path = "F:") {
       renderFiles(data.dirContent);
     } else {
       showError(data.error);
-      loadDir(null);
+      setTimeout(() => {
+        loadDir(null);
+      }, 2000)
     }
   });
 }
@@ -206,7 +209,7 @@ function renderFiles(files) {
     const name = document.createElement("div");
 
     // For non linux path
-    if(f.path?.includes("\\\\")) {
+    if(f.path?.includes("\\")) {
       name.className = "file-name";
       name.innerText = f.isDir ? f.path.split("\\").pop() : f.name;
     } else {
@@ -231,7 +234,14 @@ function renderFiles(files) {
 function shouldHighlightFolder(file) {
   if (!file.isDir) return false;
 
-  const name = file.path.split("/").pop().toLowerCase();
+  let name;
+
+  if(file.path?.includes("\\")) {
+    name = file.path.split("\\").pop().toLowerCase();
+  } else {
+    name = file.path.split("/").pop().toLowerCase();
+  }
+  
   return HIGHLIGHT_FOLDERS.includes(name);
   //return HIGHLIGHT_FOLDERS.some(n => name.includes(n));
   //const HIGHLIGHT_PATTERNS = [/^steam/i, /^game/i];
