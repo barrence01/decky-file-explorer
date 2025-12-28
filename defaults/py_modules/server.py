@@ -8,7 +8,7 @@ import mimetypes
 import os
 import socket
 import bcrypt
-from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
+from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError, get_all_drives, get_drive_root
 import decky
 import gamerecording
 import subprocess
@@ -98,6 +98,24 @@ async def auth_middleware(request, handler):
 
     return await handler(request)
 
+@web.middleware
+async def error_middleware(request, handler):
+    try:
+        return await handler(request)
+
+    except web.HTTPException as ex:
+        return web.json_response(
+            {"error": ex.reason},
+            status=ex.status
+        )
+
+    except Exception as ex:
+        return web.json_response(
+            {"error": str(ex)},
+            status=500
+        )
+
+
 # =========================
 # Util methods
 # =========================
@@ -113,25 +131,31 @@ def check_credentials():
     login = settings_credentials.getSetting(USERNAME_FIELD)
     password = settings_credentials.getSetting(PASSWORD_FIELD)
     if(login is None or login.strip() == ''):
+        decky.logger.warning(f"check_credentials - username not found in settings, using default 'admin' instead")
         settings_credentials.setSetting(USERNAME_FIELD, "admin")
     if(password is None or password.strip() == ''):
+        decky.logger.warning(f"check_credentials - password not found in settings, using default 'admin' instead")
         settings_credentials.setSetting(PASSWORD_FIELD, hash_password("admin"))
 
 def check_server_settings():
     host = settings_server.getSetting(HOST_FIELD)
-    if host is None or host == "":
+    if host is None or host.strip() == "":
+        decky.logger.warning(f"check_server_settings - host not found in settings, using default '{DEFAULT_HOST}' instead")
         settings_server.setSetting(HOST_FIELD, DEFAULT_HOST)
         
     port = settings_server.getSetting(PORT_FIELD)
     if port is None or port == "":
+        decky.logger.warning(f"check_server_settings - port not found in settings, using default '{DEFAULT_PORT}' instead")
         settings_server.setSetting(PORT_FIELD, DEFAULT_PORT)
 
     base_dir = settings_server.getSetting(BASE_DIR_FIELD)
-    if base_dir is None or base_dir == "":
+    if base_dir is None or base_dir.strip() == "":
+        decky.logger.warning(f"check_server_settings - base_dir not found in settings, using default '{os.path.expanduser("~")}' instead")
         settings_server.setSetting(BASE_DIR_FIELD, os.path.expanduser("~"))
 
-    shutdown_timeout = int(settings_server.getSetting(SHUTDOWN_TIMEOUT_FIELD) or DEFAULT_TIMEOUT_IN_SECONDS)
+    shutdown_timeout = settings_server.getSetting(SHUTDOWN_TIMEOUT_FIELD)
     if shutdown_timeout is None or shutdown_timeout == "":
+        decky.logger.warning(f"check_server_settings - shutdown_timeout not found in settings, using default '{DEFAULT_TIMEOUT_IN_SECONDS}' instead")
         settings_server.setSetting(SHUTDOWN_TIMEOUT_FIELD, DEFAULT_TIMEOUT_IN_SECONDS)
 
 def increase_login_attempt_count() -> int:
@@ -183,7 +207,7 @@ class WebServer:
         self.host = host
         self.port = port
 
-        self.app = web.Application(middlewares=[activity_middleware, auth_middleware])
+        self.app = web.Application(middlewares=[activity_middleware, error_middleware, auth_middleware])
         self.app["server"] = self
         self.app[AUTH_TOKEN_FIELD] = set()
 
@@ -214,12 +238,13 @@ class WebServer:
         self.app.router.add_post("/api/dir/download", self.download)
         self.app.router.add_post("/api/dir/delete", self.delete)
         self.app.router.add_post("/api/file/rename", self.rename)
-        self.app.router.add_post("/api/dir/paste", self.paste)
+        self.app.router.add_post("/api/dir/paste", self.paste_move)
         self.app.router.add_post("/api/dir/create", self.create_dir)
         self.app.router.add_get("/api/file/view", self.view_file)
         self.app.router.add_get("/api/steam/clips", self.list_steam_clips)
         self.app.router.add_post("/api/steam/clips/assemble", self.assemble_steam_clip)
         self.app.router.add_get("/api/steam/clips/thumbnail/{clipId}", self.get_steam_clip_thumbnail)
+        self.app.router.add_post("/api/drives/list", self.list_all_drives)
 
 
     def _setup_static(self):
@@ -313,8 +338,12 @@ class WebServer:
         if not path:
             path = server_settings.get_base_dir()
 
+        if path in ["/", "C:\\"]:
+            path = server_settings.get_base_dir()
+
         try:
             selected_dir = self.fs.get_object(path)
+            selected_drive = get_drive_root(path)
 
             if not selected_dir.isDir():
                 return web.json_response(
@@ -326,6 +355,7 @@ class WebServer:
 
             return web.json_response({
                 "selectedDir": selected_dir.to_dict(),
+                "selectedDrive":str(selected_drive),
                 "dirContent": [obj.to_dict() for obj in items]
             })
 
@@ -337,11 +367,13 @@ class WebServer:
     
     @log_exceptions
     async def delete(self, request: web.Request):
+        decky.logger.info("delete - Initiated")
         data = await request.json()
         paths = data.get("paths", [])
 
         if not paths:
             raise web.HTTPBadRequest(reason="No paths provided")
+        decky.logger.warning(f"delete - deleting files {paths}")
 
         try:
             for path in paths:
@@ -358,12 +390,14 @@ class WebServer:
     
     @log_exceptions
     async def rename(self, request: web.Request):
+        decky.logger.info("rename - Initiated")
         data = await request.json()
         path = data.get("path")
         new_name = data.get("newName")
 
         if not path or not new_name:
             raise web.HTTPBadRequest(reason="Missing rename data")
+        decky.logger.warning(f"rename - renaming file '{path}' to '{new_name}'")
 
         try:
             self.fs.rename(path, new_name)
@@ -372,7 +406,8 @@ class WebServer:
             return web.json_response({"error": str(e)}, status=400)
     
     @log_exceptions
-    async def paste(self, request: web.Request):
+    async def paste_move(self, request: web.Request):
+        decky.logger.info("paste_move - Initiated")
         data = await request.json()
 
         mode = data.get("mode")
@@ -382,6 +417,7 @@ class WebServer:
 
         if mode not in ("copy", "move"):
             raise web.HTTPBadRequest(reason="Invalid mode")
+        decky.logger.info(f"paste_move - with mode '{mode}' with overwrite_mode '{overwrite}' for '{paths}' to '{target_dir}'")
 
         conflicts = []
 
@@ -411,11 +447,13 @@ class WebServer:
     
     @log_exceptions
     async def create_dir(self, request: web.Request):
+        decky.logger.info("create_dir - Initiated")
         data = await request.json()
         path = data.get("path")
 
         if not path:
             raise web.HTTPBadRequest(reason="Missing path")
+        decky.logger.info(f"create_dir - Creating folder {path}")
 
         try:
             self.fs.create_dir(path)
@@ -535,6 +573,7 @@ class WebServer:
 
     @log_exceptions
     async def view_file(self, request: web.Request):
+        decky.logger.info("view_file - Initiated")
         path = request.query.get("path")
         if not path:
             raise web.HTTPBadRequest(reason="Missing path")
@@ -551,6 +590,7 @@ class WebServer:
 
         range_header = request.headers.get("Range")
 
+        decky.logger.info(f"view_file - Showing file {file_path}")
         if range_header:
             start, end = range_header.replace("bytes=", "").split("-")
             start = int(start)
@@ -617,6 +657,7 @@ class WebServer:
     # =========================
     @log_exceptions
     async def list_steam_clips(self, request: web.Request):
+        decky.logger.info("list_steam_clips - initiated")
         clips = gamerecording.scan_steam_recordings()
         return web.json_response({
             "count": len(clips),
@@ -632,7 +673,7 @@ class WebServer:
             "overwrite": false             # optional
         }
         """
-
+        decky.logger.info("assemble_steam_clip - initiated")
         data = await request.json()
 
         mpd_path = data.get("mpd")
@@ -708,6 +749,21 @@ class WebServer:
 
         raise web.HTTPNotFound(reason="Thumbnail not found")
 
+    @log_exceptions
+    async def list_all_drives(self, request: web.Request):
+        external_mounts = get_all_drives()
+
+        data = await request.json()
+        path = data.get("path")
+        currentDrive = os.path.expanduser("~")
+
+        if path:
+            currentDrive = get_drive_root(path)
+
+        return web.json_response({
+            "currentDrive": str(currentDrive),
+            "drives":[obj.to_dict() for obj in external_mounts]
+        })
 
     # --------------------
     # SERVER LIFECYCLE

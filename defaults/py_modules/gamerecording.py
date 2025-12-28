@@ -1,8 +1,11 @@
 from pathlib import Path
 import subprocess
 import shutil
+import os
+import decky
 
 STEAM_USERDATA_DIR = Path.home() / ".local/share/Steam/userdata"
+STEAM_USERDATA_DIR_WIN = Path.home() / ".local/share/Steam/userdata"
 
 def convert_dash_folder_to_mp4(video_dir: str | Path, output_file: str | Path):
     video_dir = Path(video_dir)
@@ -31,8 +34,18 @@ def convert_dash_folder_to_mp4(video_dir: str | Path, output_file: str | Path):
 def scan_steam_recordings():
     results = []
 
-    if not STEAM_USERDATA_DIR.exists():
-        return results
+    user_dir = ""
+
+    if os.name == "nt":
+        decky.logger.info("scan_steam_recordings - Windows detected")
+        if not STEAM_USERDATA_DIR_WIN.exists():
+            return results
+        user_dir = STEAM_USERDATA_DIR_WIN
+    else:      
+        decky.logger.info("scan_steam_recordings - Linux detected")
+        if not STEAM_USERDATA_DIR.exists():
+            return results
+        user_dir = STEAM_USERDATA_DIR
 
     for user_dir in STEAM_USERDATA_DIR.iterdir():
         if not user_dir.is_dir():

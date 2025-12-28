@@ -1,7 +1,45 @@
 import { scanRecordings } from "./gamerecording.js";
 import { downloadSelected, uploadFiles } from './upload.js';
 import { addMobileRenderInteractions, addMobileToolbarButtons } from "./mobile.js";
-import { checkLogin, doLogin, doLogoff } from "./login.js";
+import { checkLogin, doLogin, doLogoff, passwordEnterEvent } from "./login.js";
+import { showDrivePicker, updateDriveIndicator } from "./drives.js";
+
+document.addEventListener("DOMContentLoaded", () => {
+  const hamburger = document.querySelector(".hamburger");
+  const sidePanel = document.getElementById("sidePanel");
+  const mainContent = document.getElementById("mainContent");
+
+  hamburger.addEventListener("click", () => {
+    sidePanel.classList.toggle("visible");
+    mainContent.classList.toggle("shifted");
+  });
+  passwordEnterEvent();
+  checkLogin();
+
+  const driveIndicator = document.getElementById("driveIndicator");
+  driveIndicator.addEventListener("click", async () => {
+      const existing = document.getElementById("drivePicker");
+      if (existing) {
+        existing.remove();
+        return;
+      }
+
+    try {
+      const res = await fetch("/api/drives/list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: currentPath })
+      });
+
+      const data = await res.json();
+      showDrivePicker(data.drives);
+    } catch (err) {
+      console.error("Failed to load drives", err);
+    }
+  });
+
+  asyncUpdateDriveIndicator();
+}); 
 
 /* ---------- Exposing functions to DOM ---------- */
 window.doLogin = doLogin;
@@ -34,7 +72,8 @@ export const HIGHLIGHT_FOLDERS = [
   "Applications",
   "Logs",
   "Data",
-  "Settings"
+  "Settings",
+  "Favorites"
 ].map(n => n.toLowerCase());
 
 export function showLoading() {
@@ -147,7 +186,7 @@ export function showFileView() {
   loadDir();
 }
 
-export async function loadDir(path = "F:\\") {
+export async function loadDir(path = null) {
   return withLoading(async () => {
     hideSidePanel();
     selectedItems = [];
@@ -598,4 +637,10 @@ export function openPreview(file) {
 function closePreview() {
   document.getElementById("previewModal").classList.add("hidden");
   document.getElementById("previewBody").innerHTML = "";
+}
+
+export function asyncUpdateDriveIndicator() {
+  setTimeout(async () => {
+    updateDriveIndicator(currentPath)
+  },1000);
 }
