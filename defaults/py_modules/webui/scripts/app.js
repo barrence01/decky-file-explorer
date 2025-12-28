@@ -170,9 +170,11 @@ function getParentPath(path) {
   const parts = path.replaceAll("\\","/").replace(/\/+$/, "").split("/");
 
   if(path.includes("C:") || path.includes("/home/decky")) {
-    if (parts.length <= 3) return null;
+    if (parts.length <= 3) {
+      return null;
+    }
   }
-  else if(path.includes(":") && parts.length <= 1) {
+  else if(path.includes(":") || parts.length <= 1) {
     return null;
   }
 
