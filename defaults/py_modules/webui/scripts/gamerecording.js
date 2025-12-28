@@ -1,6 +1,8 @@
 import { hideSidePanel, toolbarButton, withLoading, showSuccess, showError,
          selectedItems, setSelectedItems, clearClipboard } from './app.js';
 
+import { openGameRecordingPreview } from "./preview.js";
+
 export async function scanRecordings() {
   return withLoading(async () => {
     hideSidePanel();
@@ -42,11 +44,21 @@ function updateGameRecordingToolbar() {
         "Assemble",
         "fas fa-cogs",
         assembleVideo
-      )
-    )};
+      ))
+    bar.appendChild(
+      toolbarButton(
+        "Assemble for browser playback",
+        "fas fa-cogs",
+        () => {assembleVideo(false, true)}
+      ))
+    };
 }
 
-async function assembleVideo() {
+/**
+ * @param {boolean} _overwrite
+ * @param {boolean} _browser_compatible
+ */
+async function assembleVideo(_overwrite = false, _browser_compatible) {
   return withLoading(async () => {
     const item = selectedItems[0];
 
@@ -54,15 +66,27 @@ async function assembleVideo() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        mpd: item.mpd
+        mpd: item.mpd,
+        overwrite: _overwrite,
+        browser_compatible: _browser_compatible
       })
     });
 
     const data = await res.json();
 
     if (!res.ok) {
-      showError(data.error || "Assemble failed");
-      return;
+      if(res.status !== 409) {
+        showError(data.error || "Assemble failed");
+        return;
+      }
+
+      const confirmOverwrite = confirm(
+        `The following file already exist in folder. Overwrite them?`
+      );
+
+      if (confirmOverwrite) {
+        assembleVideo(true, _browser_compatible);
+      }
     }
     showSuccess("The video has been assembled. You can find it in the 'Videos' folder.")
   });
@@ -125,18 +149,4 @@ function toggleGameRecordingSelect(el, file) {
   el.classList.add("selected");
 
   updateGameRecordingToolbar();
-}
-
-function openGameRecordingPreview(file) {
-    const body = document.getElementById("previewBody");
-    body.innerHTML = "";
-
-    const url = `/api/steam/clips/thumbnail/${encodeURIComponent(file.clipId)}`;
-
-    const img = document.createElement("img");
-    img.src = url;
-    body.appendChild(img);
-
-    document.getElementById("previewModal").classList.remove("hidden");
-    hideSidePanel();
 }

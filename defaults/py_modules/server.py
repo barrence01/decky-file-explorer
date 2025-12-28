@@ -670,7 +670,8 @@ class WebServer:
         Expects JSON:
         {
             "mpd": "/full/path/to/session.mpd",
-            "overwrite": false             # optional
+            "overwrite": false    
+            "browser_compatible": false
         }
         """
         decky.logger.info("assemble_steam_clip - initiated")
@@ -678,6 +679,7 @@ class WebServer:
 
         mpd_path = data.get("mpd")
         overwrite = bool(data.get("overwrite", False))
+        browser_compatible = bool(data.get("browser_compatible", False))
 
         if not mpd_path:
             raise web.HTTPBadRequest(reason="Missing mpd path")
@@ -712,12 +714,20 @@ class WebServer:
         loop = asyncio.get_running_loop()
 
         try:
-            await loop.run_in_executor(
-                None,
-                gamerecording.assemble_dash_to_mp4,
-                str(mpd),
-                output_path
-            )
+            if browser_compatible:
+                await loop.run_in_executor(
+                    None,
+                    gamerecording.assemble_steam_clip_browser_compatible,
+                    str(mpd),
+                    output_path
+                )
+            else:
+                await loop.run_in_executor(
+                    None,
+                    gamerecording.assemble_steam_clip,
+                    str(mpd),
+                    output_path
+                )
         except subprocess.CalledProcessError:
             raise web.HTTPInternalServerError(reason="FFmpeg failed assembling clip")
         except Exception as e:

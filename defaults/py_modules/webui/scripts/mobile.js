@@ -1,7 +1,9 @@
-import { openPreview, loadDir, toggleSelect, selectedItems, currentPath,
+import { loadDir, toggleSelect, getSelectedItems, currentPath,
          toolbarButton, createNewFolder, startMove, startCopy, deleteSelected,
          renameSelected, showHidden, setShowHidden, showPropertiesModal
         } from './app.js';
+
+import { openPreview } from "./preview.js";
 
 import { downloadSelected, uploadFiles } from './upload.js';
 
@@ -24,7 +26,7 @@ export function addMobileRenderInteractions(div, f) {
         clearTimeout(pressTimer);
 
         if (!longPressTriggered) {
-            if(selectedItems == 0) {
+            if(getSelectedItems() && getSelectedItems().length == 0) {
                 if (f.isDir) {
                     loadDir(f.path);
                 } else if (f.type === "image" || f.type === "video") {

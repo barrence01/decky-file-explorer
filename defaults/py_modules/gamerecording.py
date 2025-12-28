@@ -99,7 +99,7 @@ def scan_steam_recordings():
 
     return results
 
-def assemble_dash_to_mp4(mpd_path: str, output_path: Path):
+def assemble_steam_clip(mpd_path: str, output_path: Path):
     if not output_path.parent.exists():
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -112,6 +112,29 @@ def assemble_dash_to_mp4(mpd_path: str, output_path: Path):
         "-loglevel", "error",
         "-i", mpd_path,
         "-c", "copy",
+        str(output_path)
+    ]
+
+    subprocess.run(cmd, check=True)
+
+def assemble_steam_clip_browser_compatible(mpd_path: str, output_path: Path):
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError("ffmpeg not found in PATH")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-loglevel", "error",
+        "-i", mpd_path,
+        "-map", "0:v:0",
+        "-map", "0:a:0",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-movflags", "+faststart",
+
         str(output_path)
     ]
 

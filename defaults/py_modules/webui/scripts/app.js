@@ -4,6 +4,8 @@ import { addMobileRenderInteractions, addMobileToolbarButtons } from "./mobile.j
 import { checkLogin, doLogin, doLogoff, passwordEnterEvent } from "./login.js";
 import { showDrivePicker, updateDriveIndicator } from "./drives.js";
 import { truncateString } from "./util.js";
+import { openPreview } from "./preview.js";
+
 
 document.addEventListener("DOMContentLoaded", () => {
   const hamburger = document.querySelector(".hamburger");
@@ -43,13 +45,11 @@ document.addEventListener("DOMContentLoaded", () => {
 }); 
 
 /* ---------- Exposing functions to DOM ---------- */
-window.doLogin = doLogin;
-window.closePreview = closePreview;
-window.downloadPreviewFile = downloadPreviewFile;
-window.doLogoff = doLogoff;
-window.loadDir = loadDir;
-window.closePropertiesModal = closePropertiesModal;
-window.scanRecordings = scanRecordings;
+window['doLogin'] = doLogin;
+window['doLogoff'] = doLogoff;
+window['loadDir'] = loadDir;
+window['closePropertiesModal'] = closePropertiesModal;
+window['scanRecordings'] = scanRecordings;
 
 export let currentPath = null;
 export let selectedItems = [];
@@ -59,8 +59,6 @@ export let successTimeout = null;
 export let clipboardItems = [];
 export let clipboardMode = null; // "copy" | "move"
 export let showHidden = false;
-export let currentPreviewFile = null;
-export let previewMedia = null;
 
 export const HIGHLIGHT_FOLDERS = [
   "Downloads",
@@ -91,6 +89,8 @@ export function hideLoading() {
 }
 
 export function hideSidePanel() {
+  const sidePanel = document.getElementById("sidePanel");
+  const mainContent = document.getElementById("mainContent");
   sidePanel.classList.remove("visible");
   mainContent.classList.remove("shifted");
 }
@@ -138,6 +138,10 @@ export function showSuccess(message) {
 
 export function setSelectedItems(value) {
   selectedItems = value;
+}
+
+export function getSelectedItems() {
+  return selectedItems;
 }
 
 export function setClipboardItems(value) {
@@ -617,84 +621,6 @@ export async function createNewFolder() {
   }
 
   loadDir(currentPath);
-}
-
-/* ---------- PREVIEW ---------- */
-
-export function openPreview(file) {
-  currentPreviewFile = file;
-
-  const modal = document.getElementById("previewModal");
-  const body = document.getElementById("previewBody");
-  const title = document.getElementById("previewFilename");
-
-  body.innerHTML = "";
-  previewMedia = null;
-
-  title.textContent = file.name || file.path.split("/").pop();
-
-  const url = `/api/file/view?path=${encodeURIComponent(file.path)}`;
-
-  if (file.type === "image") {
-    const img = document.createElement("img");
-    img.src = url;
-    img.className = "preview-media-item";
-    previewMedia = img;
-    body.appendChild(img);
-  }
-
-  if (file.type === "video") {
-    const video = document.createElement("video");
-    video.src = url;
-    video.controls = true;
-    video.autoplay = true;
-    video.playsInline = true;
-    video.className = "preview-media-item";
-    previewMedia = video;
-    body.appendChild(video);
-  }
-
-  modal.classList.remove("hidden");
-  hideSidePanel();
-
-  document.addEventListener("keydown", previewKeyHandler);
-}
-
-function previewKeyHandler(e) {
-  if (e.key === "Escape") closePreview();
-}
-
-export function closePreview() {
-  const modal = document.getElementById("previewModal");
-
-  if (previewMedia?.tagName === "VIDEO") {
-    previewMedia.pause();
-    previewMedia.src = "";
-  }
-
-  modal.classList.add("hidden");
-  document.getElementById("previewBody").innerHTML = "";
-
-  document.removeEventListener("keydown", previewKeyHandler);
-
-  currentPreviewFile = null;
-  previewMedia = null;
-}
-
-export function downloadPreviewFile() {
-  if (!currentPreviewFile) {
-    return
-  };
-
-  const prevSelection = [...selectedItems];
-
-  selectedItems.length = 0;
-  selectedItems.push(currentPreviewFile);
-
-  downloadSelected();
-
-  selectedItems.length = 0;
-  selectedItems.push(...prevSelection);
 }
 
 /* ---------- DRIVES ---------- */
