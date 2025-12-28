@@ -60,18 +60,18 @@ def get_windows_drives() -> list[DriveInfo]:
 
     for i in range(26):
         if not (bitmask & (1 << i)):
-            continue  # drive letter does NOT exist
+            continue
 
         letter = chr(ord("A") + i)
         path = f"{letter}:\\"
         dtype = kernel32.GetDriveTypeW(ctypes.c_wchar_p(path))
 
-        # 2 = removable, 3 = fixed, 5 = CD-ROM
+        # 2 = removable, 3 = fixed(may be a USB HDD/SSD), 5 = CD-ROM
         if dtype == 0:
             continue
 
         removable = dtype == 2
-
+        
         transport = "usb" if removable else "internal"
 
         drives.append(

@@ -5,7 +5,22 @@ import os
 import decky
 
 STEAM_USERDATA_DIR = Path.home() / ".local/share/Steam/userdata"
-STEAM_USERDATA_DIR_WIN = Path.home() / ".local/share/Steam/userdata"
+
+def get_steam_dir() -> str:
+    import winreg
+    registry_paths = [
+        r"SOFTWARE\WOW6432Node\Valve\Steam",  # 64-bit Windows
+        r"SOFTWARE\Valve\Steam"               # 32-bit Windows
+    ]
+
+    for reg_path in registry_paths:
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path) as key:
+                return winreg.QueryValueEx(key, "InstallPath")[0]
+        except FileNotFoundError:
+            pass
+
+    return ""
 
 def convert_dash_folder_to_mp4(video_dir: str | Path, output_file: str | Path):
     video_dir = Path(video_dir)
@@ -34,20 +49,21 @@ def convert_dash_folder_to_mp4(video_dir: str | Path, output_file: str | Path):
 def scan_steam_recordings():
     results = []
 
-    user_dir = ""
+    steam_user_dir = ""
 
     if os.name == "nt":
         decky.logger.info("scan_steam_recordings - Windows detected")
-        if not STEAM_USERDATA_DIR_WIN.exists():
+        steam_dir = Path(get_steam_dir())
+        if not (steam_dir and steam_dir.exists()):
             return results
-        user_dir = STEAM_USERDATA_DIR_WIN
+        steam_user_dir = steam_dir / "userdata"
     else:      
         decky.logger.info("scan_steam_recordings - Linux detected")
         if not STEAM_USERDATA_DIR.exists():
             return results
-        user_dir = STEAM_USERDATA_DIR
+        steam_user_dir = STEAM_USERDATA_DIR
 
-    for user_dir in STEAM_USERDATA_DIR.iterdir():
+    for user_dir in steam_user_dir.iterdir():
         if not user_dir.is_dir():
             continue
 

@@ -723,6 +723,8 @@ class WebServer:
         except Exception as e:
             raise web.HTTPInternalServerError(reason=str(e))
 
+        decky.logger.info(f"Video assembled and moved to {videos_dir}")
+        
         return web.json_response({
             "status": "ok",
             "output": str(output_path),

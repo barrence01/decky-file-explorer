@@ -14,7 +14,7 @@ export function showDrivePicker(drives) {
     if(d.path == "/") {
       return;
     }
-
+    console.log(d)
     const item = document.createElement("div");
     item.className = "drive-item";
     item.textContent = `${d.path} ${d.removable ? "(USB)" : ""}`;
