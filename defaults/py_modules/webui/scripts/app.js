@@ -1,7 +1,45 @@
 import { scanRecordings } from "./gamerecording.js";
 import { downloadSelected, uploadFiles } from './upload.js';
 import { addMobileRenderInteractions, addMobileToolbarButtons } from "./mobile.js";
-import { checkLogin, doLogin, doLogoff } from "./login.js";
+import { checkLogin, doLogin, doLogoff, passwordEnterEvent } from "./login.js";
+import { showDrivePicker, updateDriveIndicator } from "./drives.js";
+
+document.addEventListener("DOMContentLoaded", () => {
+  const hamburger = document.querySelector(".hamburger");
+  const sidePanel = document.getElementById("sidePanel");
+  const mainContent = document.getElementById("mainContent");
+
+  hamburger.addEventListener("click", () => {
+    sidePanel.classList.toggle("visible");
+    mainContent.classList.toggle("shifted");
+  });
+  passwordEnterEvent();
+  checkLogin();
+
+  const driveIndicator = document.getElementById("driveIndicator");
+  driveIndicator.addEventListener("click", async () => {
+      const existing = document.getElementById("drivePicker");
+      if (existing) {
+        existing.remove();
+        return;
+      }
+
+    try {
+      const res = await fetch("/api/drives/list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: currentPath })
+      });
+
+      const data = await res.json();
+      showDrivePicker(data.drives);
+    } catch (err) {
+      console.error("Failed to load drives", err);
+    }
+  });
+
+  asyncUpdateDriveIndicator();
+}); 
 
 /* ---------- Exposing functions to DOM ---------- */
 window.doLogin = doLogin;
@@ -34,7 +72,8 @@ export const HIGHLIGHT_FOLDERS = [
   "Applications",
   "Logs",
   "Data",
-  "Settings"
+  "Settings",
+  "Favorites"
 ].map(n => n.toLowerCase());
 
 export function showLoading() {
@@ -130,10 +169,11 @@ function getParentPath(path) {
   
   const parts = path.replaceAll("\\","/").replace(/\/+$/, "").split("/");
 
-  if(path.includes("C:")) {
+  if(path.includes("C:") || path.includes("/home/decky")) {
     if (parts.length <= 3) return null;
-  } else if(path != "/media" && path != "/mnt") {
-    if (parts.length <= 3) return null;
+  }
+  else if(path.includes(":") && parts.length <= 1) {
+    return null;
   }
 
   parts.pop();
@@ -169,7 +209,9 @@ export async function loadDir(path = null) {
       renderFiles(data.dirContent);
     } else {
       showError(data.error);
-      loadDir(null);
+      setTimeout(() => {
+        loadDir(null);
+      }, 2000)
     }
   });
 }
@@ -206,7 +248,7 @@ function renderFiles(files) {
     const name = document.createElement("div");
 
     // For non linux path
-    if(f.path?.includes("\\\\")) {
+    if(f.path?.includes("\\")) {
       name.className = "file-name";
       name.innerText = f.isDir ? f.path.split("\\").pop() : f.name;
     } else {
@@ -231,7 +273,14 @@ function renderFiles(files) {
 function shouldHighlightFolder(file) {
   if (!file.isDir) return false;
 
-  const name = file.path.split("/").pop().toLowerCase();
+  let name;
+
+  if(file.path?.includes("\\")) {
+    name = file.path.split("\\").pop().toLowerCase();
+  } else {
+    name = file.path.split("/").pop().toLowerCase();
+  }
+  
   return HIGHLIGHT_FOLDERS.includes(name);
   //return HIGHLIGHT_FOLDERS.some(n => name.includes(n));
   //const HIGHLIGHT_PATTERNS = [/^steam/i, /^game/i];
@@ -588,4 +637,10 @@ export function openPreview(file) {
 function closePreview() {
   document.getElementById("previewModal").classList.add("hidden");
   document.getElementById("previewBody").innerHTML = "";
+}
+
+export function asyncUpdateDriveIndicator() {
+  setTimeout(async () => {
+    updateDriveIndicator(currentPath)
+  },1000);
 }

@@ -1,19 +1,5 @@
-import { withLoading, showFileView, showError, showSuccess, 
-         setSelectedItems, setClipboardItems, setClipboardMode, setCurrentPath,
-         selectedItems, clipboardItems, clipboardMode, currentPath } from './app.js';
-
-document.addEventListener("DOMContentLoaded", () => {
-  const hamburger = document.querySelector(".hamburger");
-  const sidePanel = document.getElementById("sidePanel");
-  const mainContent = document.getElementById("mainContent");
-
-  hamburger.addEventListener("click", () => {
-    sidePanel.classList.toggle("visible");
-    mainContent.classList.toggle("shifted");
-  });
-  passwordEnterEvent();
-  checkLogin();
-});
+import { withLoading, showFileView, showError, 
+         setSelectedItems, setClipboardItems, setClipboardMode, setCurrentPath } from './app.js';
 
 /* ---------- AUTH ---------- */
 export async function checkLogin() {
@@ -28,7 +14,6 @@ export async function checkLogin() {
     }
   });
 }
-
 
 export async function doLogin() {
   return withLoading(async () => {
@@ -81,7 +66,7 @@ export async function doLogoff() {
   hamburger.click();
 }
 
-async function passwordEnterEvent() {
+export async function passwordEnterEvent() {
   const passwordInput = document.getElementById('password');
 
   passwordInput.addEventListener('keydown', function(event) {
