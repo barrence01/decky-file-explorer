@@ -119,6 +119,9 @@ def get_linux_drives() -> list[DriveInfo]:
         if dev.get("type") not in ("part", "disk"):
             continue
 
+        if dev.get("fstype") in ("swap"):
+            continue
+
         drives.append(
             DriveInfo(
                 path=Path(dev["mountpoint"]),

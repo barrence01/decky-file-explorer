@@ -207,6 +207,7 @@ export async function loadDir(path = null) {
 
       updateToolbar();
       renderFiles(data.dirContent);
+      updateDriveIndicator(currentPath);
     } else {
       showError(data.error);
       setTimeout(() => {
