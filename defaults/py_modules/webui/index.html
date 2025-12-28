@@ -9,8 +9,8 @@
 
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" />
-    <link rel="stylesheet" href="scripts/common.css?v=1.0.4.7" />
-    <script type="module" src="scripts/menu.js?v=1.1.0.8"></script>
+    <link rel="stylesheet" href="scripts/common.css?v=1.0.4.8" />
+    <script type="module" src="scripts/menu.js?v=1.1.0.9"></script>
   </head>
   <!-- SIDE PANEL -->
   <div id="sidePanel" class="side-panel">
@@ -28,9 +28,19 @@
   </div>
 
   <div id="previewModal" class="modal hidden">
-    <div class="modal-content-media preview">
-      <button class="close-btn" onclick="closePreview()">×</button>
-      <div id="previewBody"></div>
+    <div class="preview-shell">
+      <header class="preview-header">
+        <span id="previewFilename"></span>
+        <button class="preview-close-btn" onclick="closePreview()" aria-label="Close preview">x</button>
+      </header>
+
+      <div id="previewBody" class="preview-body"></div>
+
+      <footer class="preview-footer">
+        <button onclick="downloadPreviewFile()">
+          <i class="fas fa-download"></i> Download
+        </button>
+      </footer>
     </div>
   </div>
 

@@ -307,33 +307,127 @@ header {
 }
 
 /* ---------- Web View ---------- */
-#previewBody {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-}
 
+  /* ---------- FULLSCREEN PREVIEW ---------- */
+  .preview-shell {
+    background: #000;
+    width: 96vw;
+    height: 96vh;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
 
-.modal-content-media {
-  background: #1e1e1e;
-  color: #fff;
-  padding: 16px;
-  border-radius: 8px;
-  width: 75%;
-}
+  /* Header / Footer */
+  .preview-header,
+  .preview-footer {
+    background: #1f2937;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+  }
 
-.modal-content-media.preview {
-  max-width: 90vw;
-  max-height: 90vh;
-}
+  .preview-header {
+    justify-content: space-between;
+    font-size: 14px;
+  }
 
-.modal-content-media.preview img,
-.modal-content-media.preview video {
-  max-width: 90%;
-  max-height: 80vh;
-  display: block;
-}
+  .preview-footer {
+    justify-content: center;
+  }
+
+  .preview-footer button {
+    background: #2563eb;
+    border: none;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  /* ---------- MEDIA AREA ---------- */
+  .preview-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: black;
+    overflow: hidden;
+  }
+
+  .preview-media-item {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
+  /* Mobile view */
+  @media (max-width: 768px) {
+    .preview-shell {
+      width: 100vw;
+      height: 100vh;
+      border-radius: 0;
+    }
+
+    .preview-header {
+      font-size: 13px;
+    }
+  }
+
+  /* ---------- PREVIEW CLOSE BUTTON (SCOPED) ---------- */
+  .preview-close-btn {
+    width: 36px;
+    height: 36px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 22px;
+    font-weight: bold;
+    line-height: 1;
+
+    border: none;
+    border-radius: 50%;
+
+    background: #2563eb;
+    color: #fff;
+
+    cursor: pointer;
+
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+
+    transition:
+      background-color 0.15s ease,
+      transform 0.08s ease,
+      box-shadow 0.15s ease;
+  }
+
+  .preview-close-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .preview-close-btn:active {
+    transform: scale(0.92);
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  .preview-close-btn:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+
+  /* Mobile-friendly tap size */
+  @media (pointer: coarse) {
+    .preview-close-btn {
+      width: 44px;
+      height: 44px;
+      font-size: 24px;
+    }
+  }
 
 
 /* ---------- File Highlight ---------- */
