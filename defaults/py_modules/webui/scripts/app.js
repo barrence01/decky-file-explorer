@@ -3,6 +3,7 @@ import { downloadSelected, uploadFiles } from './upload.js';
 import { addMobileRenderInteractions, addMobileToolbarButtons } from "./mobile.js";
 import { checkLogin, doLogin, doLogoff, passwordEnterEvent } from "./login.js";
 import { showDrivePicker, updateDriveIndicator } from "./drives.js";
+import { truncateString } from "./util.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   const hamburger = document.querySelector(".hamburger");
@@ -250,15 +251,18 @@ function renderFiles(files) {
 
     const name = document.createElement("div");
 
+    let fileName = ""
+
     // For non linux path
     if(f.path?.includes("\\")) {
       name.className = "file-name";
-      name.innerText = f.isDir ? f.path.split("\\").pop() : f.name;
+      fileName = f.isDir ? f.path.split("\\").pop() : f.name;
     } else {
       name.className = "file-name";
-      name.innerText = f.isDir ? f.path.split("/").pop() : f.name;
+      fileName = f.isDir ? f.path.split("/").pop() : f.name;
     }
 
+    name.innerText = truncateString(fileName, 50);
 
     div.appendChild(icon);
     div.appendChild(name);
