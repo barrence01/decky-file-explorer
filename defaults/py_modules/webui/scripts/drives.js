@@ -1,4 +1,4 @@
-import { showError, currentPath } from "./app.js";
+import { showError, currentPath, loadDir } from "./app.js";
 
 export function showDrivePicker(drives) {
   const old = document.getElementById("drivePicker");
@@ -11,6 +11,10 @@ export function showDrivePicker(drives) {
   picker.className = "drive-picker";
 
   drives.forEach(d => {
+    if(d.path == "/") {
+      return;
+    }
+
     const item = document.createElement("div");
     item.className = "drive-item";
     item.textContent = `${d.path} ${d.removable ? "(USB)" : ""}`;

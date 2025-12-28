@@ -150,7 +150,7 @@ def check_server_settings():
 
     base_dir = settings_server.getSetting(BASE_DIR_FIELD)
     if base_dir is None or base_dir.strip() == "":
-        decky.logger.warning(f"check_server_settings - base_dir not found in settings, using default '{os.path.expanduser("~")}' instead")
+        decky.logger.warning(f"check_server_settings - base_dir not found in settings, using default '{str(os.path.expanduser('~'))}' instead")
         settings_server.setSetting(BASE_DIR_FIELD, os.path.expanduser("~"))
 
     shutdown_timeout = settings_server.getSetting(SHUTDOWN_TIMEOUT_FIELD)
