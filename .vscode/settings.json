@@ -7,11 +7,67 @@
     "python.testing.pytestArgs": [
         "tests"
     ],
+    "editor.semanticTokenColorCustomizations": {
+        "enabled": true
+    },
+    "python.useEnvironmentsExtension": true ,
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
-    "python.languageServer": "Default",
+    "python.languageServer": "Jedi",
     "python.analysis.typeCheckingMode": "standard",
     "python.analysis.diagnosticSeverityOverrides": {
         "reportOptionalMemberAccess": "none"
+    },
+    "python.experiments.optInto": [
+        "pythonDiscoveryUsingWorkers"
+    ],
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "debugpy.showPythonInlineValues": true,
+    "python.autoComplete.extraPaths": [
+        "./defaults/py_modules",
+        "./defaults/py_modules/externals",
+        "./bin"
+    ],
+    "python.createEnvironment.contentButton": "show",
+    "editor.defaultFormatter": "ms-python.python",
+    "editor.semanticHighlighting.enabled": false,
+    "editor.tokenColorCustomizations": {
+        "textMateRules": [
+            {
+                "name": "Python CAPS constants",
+                "scope": "source.python constant.other.caps.python",
+                "settings": {
+                    "foreground": "#4FC1FF"
+                }
+            },
+            {
+                "name": "Python CAPS constants",
+                "scope": "source.python",
+                "settings": {
+                    "foreground": "#4EC9B0"
+                }
+            },
+            {
+                "name": "Python CAPS function call",
+                "scope": "source.python meta.function-call.python meta.function-call.generic.python",
+                "settings": {
+                    "foreground": "#DCDCAA"
+                }
+            },
+            {
+                "name": "Python CAPS function fstring",
+                "scope": "source.python meta.function-call.python meta.function-call.arguments.python meta.fstring.python string.interpolated.python string.quoted.single.python",
+                "settings": {
+                    "foreground": "#CE9178"
+                }
+            },
+            {
+                "name": "Python CAPS function fstring variable",
+                "scope": "source.python meta.function-call.python meta.function-call.arguments.python meta.fstring.python",
+                "settings": {
+                    "foreground": "#9CDCFE"
+                }
+            }
+        ]
     }
 }

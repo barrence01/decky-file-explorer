@@ -5,7 +5,7 @@ import mimetypes
 from aiohttp import web
 import zipfile
 import io
-import os
+import os, subprocess, json
 
 DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
 
@@ -20,6 +20,170 @@ class FileSystemError(Exception):
 class FileAlreadyExistsError(Exception):
     pass
 
+# =========================
+# Classes
+# =========================
+
+class DriveInfo:
+    def __init__(
+        self,
+        path: Path,
+        fstype: str | None,
+        removable: bool,
+        transport: str | None   # usb, mmc, sata, nvme, etc
+    ):
+        self.path = path
+        self.fstype = fstype
+        self.removable = removable
+        self.transport = transport
+
+    def to_dict(self) -> dict:
+        return {
+            "path": str(self.path),
+            "fstype": self.fstype,
+            "removable": self.removable,
+            "transport": self.transport
+        }
+
+
+# =========================
+# Utils
+# =========================
+
+# ----- WINDOWS -----
+def get_windows_drives() -> list[DriveInfo]:
+    import ctypes
+    drives = []
+    kernel32 = ctypes.windll.kernel32 # type: ignore
+
+    bitmask = kernel32.GetLogicalDrives()
+
+    for i in range(26):
+        if not (bitmask & (1 << i)):
+            continue
+
+        letter = chr(ord("A") + i)
+        path = f"{letter}:\\"
+        dtype = kernel32.GetDriveTypeW(ctypes.c_wchar_p(path))
+
+        # 2 = removable, 3 = fixed(may be a USB HDD/SSD), 5 = CD-ROM
+        if dtype == 0:
+            continue
+
+        removable = dtype == 2
+        
+        transport = "usb" if removable else "internal"
+
+        drives.append(
+            DriveInfo(
+                path=Path(path),
+                fstype=None,
+                removable=removable,
+                transport=transport,
+            )
+        )
+
+    return drives
+
+def is_path_on_c_root(path: Path) -> bool:
+    p = path.resolve()
+    return p.drive.upper() == "C:" and p.parent == p
+
+def is_path_on_c_drive(path: Path) -> bool:
+    p = path.resolve()
+    return p.drive.upper() == "C:"
+
+# ----- LINUX ----- 
+def get_linux_drives(_show_only_accessible = True) -> list[DriveInfo]:
+    result = subprocess.run(
+        ["lsblk", "-J", "-o", "NAME,TYPE,RM,SIZE,MOUNTPOINT,FSTYPE,TRAN"],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    data = json.loads(result.stdout)
+
+    drives = []
+
+    def walk(devices):
+        for d in devices:
+            yield d
+            for c in d.get("children", []):
+                yield from walk([c])
+
+    for dev in walk(data["blockdevices"]):
+        mount = dev.get("mountpoint")
+
+        if not mount:
+            continue
+
+        if dev.get("type") not in ("part", "disk"):
+            continue
+
+        if dev.get("fstype") in ("swap"):
+            continue
+
+        if _show_only_accessible:
+            if not os.access(Path(mount), os.R_OK | os.X_OK):
+                continue
+
+        drives.append(
+            DriveInfo(
+                path=Path(mount),
+                fstype=dev.get("fstype"),
+                removable=bool(dev.get("rm")) or dev.get("tran") in ("usb", "mmc"),
+                transport=dev.get("tran"),
+            )
+        )
+
+    return drives
+
+def is_path_on_linux_root_and_not_external_or_not_user_space(path: Path, base_dir:Path) -> bool:
+
+    is_external = False
+
+    is_user_space = False
+
+    allowed_mount_roots = (
+        Path("/mnt"),
+        Path("/media"),
+        Path("/var/media"),
+        Path("/var/mnt")
+    )
+
+    external_mounts = get_linux_drives()
+
+    if any(path.is_relative_to(m) for m in allowed_mount_roots) or any(path.is_relative_to(m.path) for m in external_mounts):
+        is_external = True
+
+    if path.is_relative_to(base_dir or Path(os.path.expanduser("~"))):
+        is_user_space = True
+    
+    return not (is_external or is_user_space)
+
+
+def get_all_drives() -> list[DriveInfo]:
+    if os.name == "nt":
+        return get_windows_drives()
+    else:
+        return get_linux_drives()
+    
+
+def get_drive_root(path: str | Path) -> Path:
+    path = Path(path).resolve()
+
+    if os.name == "nt":
+        return Path(path.drive + "\\")
+
+    result = subprocess.run(
+        ["findmnt", "-n", "-o", "TARGET", "--target", str(path)],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    return Path(result.stdout.strip())
 
 
 # =========================
@@ -160,10 +324,20 @@ class FileSystemService:
             # Relative paths are always relative to base_dir
             p = (self.base_dir / raw).resolve()
 
-        # Enforce sandbox
-        if not p.is_relative_to(self.base_dir):
-            raise FileSystemError("Access outside base directory is forbidden")
-
+        # ============================
+        # WINDOWS
+        # ============================
+        if os.name == "nt":
+            if is_path_on_c_drive(p) and not p.is_relative_to(self.base_dir):
+                raise FileSystemError("Access to main drive (C:) is forbidden")
+            
+        # ============================
+        # LINUX / UNIX
+        # ============================
+        else:
+            if is_path_on_linux_root_and_not_external_or_not_user_space(p, self.base_dir):
+                raise FileSystemError("Access to root filesystem is forbidden")         
+            
         return p
 
 

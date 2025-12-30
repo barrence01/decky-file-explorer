@@ -9,8 +9,8 @@
 
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" />
-    <link rel="stylesheet" href="scripts/common.css?v=1.0.4.5.3" />
-    <script type="module" src="scripts/menu.js?v=1.1.0.5"></script>
+    <link rel="stylesheet" href="scripts/common.css?v=1.0.4.8" />
+    <script type="module" src="scripts/menu.js?v=1.1.1.0"></script>
   </head>
   <!-- SIDE PANEL -->
   <div id="sidePanel" class="side-panel">
@@ -20,13 +20,27 @@
         <button onclick="openAppMainPage()">Home</button>
         <button onclick="openScanRecordingPage()">Steam - Game Recording</button>
       </ul>
+      <div id="driveIndicator" class="drive-indicator">
+        <div class="drive-label">Drive</div>
+        <div id="currentDrive">Loading...</div>
+      </div>
     </div>
   </div>
 
   <div id="previewModal" class="modal hidden">
-    <div class="modal-content-media preview">
-      <button class="close-btn" onclick="closePreview()">×</button>
-      <div id="previewBody"></div>
+    <div class="preview-shell">
+      <header class="preview-header">
+        <span id="previewFilename"></span>
+        <button class="preview-close-btn" onclick="closePreview()" aria-label="Close preview">x</button>
+      </header>
+
+      <div id="previewBody" class="preview-body"></div>
+
+      <footer class="preview-footer">
+        <button onclick="downloadPreviewFile()">
+          <i class="fas fa-download"></i> Download
+        </button>
+      </footer>
     </div>
   </div>
 

@@ -28,7 +28,7 @@ from utils import log_exceptions
 
 
 # Load user's settings
-from shared_settings import get_server_settings_manager, get_credentials_manager
+from shared_settings import get_server_settings_manager, get_credentials_manager, get_credentials_settings, get_server_settings
 
 settings_credentials = get_credentials_manager()
 settings_server = get_server_settings_manager()
@@ -101,7 +101,7 @@ class Plugin:
         if self.web_server:
             return self.web_server.port
         else:
-            return int(settings_server.getSetting("port") or 8082) # type: ignore
+            return get_server_settings().get_port() 
         
     def is_port_free(self, port:int):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -168,14 +168,14 @@ class Plugin:
     # Access to settings files for the deckUI
     # ----------------------------
     @log_exceptions
-    async def get_server_setting( self: 'Plugin', key: str ) -> dict[str, Any]:
+    async def get_webui_setting( self: 'Plugin', key: str ) -> dict[str, Any]:
         return ApiResponse(settings_server.getSetting( key )).to_dict() # type: ignore
     
     @log_exceptions
-    async def get_credential_setting( self: 'Plugin', key: str ) -> dict[str, Any]:
+    async def get_login_setting( self: 'Plugin', key: str ) -> dict[str, Any]:
         if key is not None and "password" in key:
             raise IllegalKeyError("it was not possible to get the key value.")
-        return ApiResponse(settings_server.getSetting( key )).to_dict() # type: ignore
+        return ApiResponse(settings_credentials.getSetting( key )).to_dict() # type: ignore
     
     @log_exceptions
     async def save_user_username( self: 'Plugin', value: str ) -> dict[str, Any]:
@@ -193,7 +193,7 @@ class Plugin:
             raise InvalidPasswordFormatError("The password can't be blank")
         settings_credentials.setSetting(server.MAX_LOGIN_ATTEMPT_FIELD, 0)
         value = server.hash_password(value)
-        settings_credentials.setSetting( server.PASSWORD_FIELD, value )
+        settings_credentials.setSetting(server.PASSWORD_FIELD, value)
         return ApiResponse().to_dict()
     
     @log_exceptions
@@ -202,12 +202,12 @@ class Plugin:
         if value is None:
             value = server.DEFAULT_TIMEOUT_IN_SECONDS
             decky.logger.info(f"Invalid value for timeout, using the default value of {server.DEFAULT_TIMEOUT_IN_SECONDS}")
-        settings_server.setSetting( server.DEFAULT_TIMEOUT_FIELD, value )
+        settings_server.setSetting( server.SHUTDOWN_TIMEOUT_FIELD, value )
         return ApiResponse().to_dict()
     
     @log_exceptions
     async def get_timeout_settings( self: 'Plugin' ) -> dict[str, Any]:
-        return ApiResponse(settings_server.getSetting(server.DEFAULT_TIMEOUT_FIELD) or server.DEFAULT_TIMEOUT_IN_SECONDS).to_dict()
+        return ApiResponse(settings_server.getSetting(server.SHUTDOWN_TIMEOUT_FIELD) or server.DEFAULT_TIMEOUT_IN_SECONDS).to_dict()
     
     @log_exceptions
     async def save_server_settings( self: 'Plugin', key: str, value: Any ) -> dict[str, Any]:

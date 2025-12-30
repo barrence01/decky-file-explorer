@@ -25,6 +25,7 @@ BACKEND_DIR="$PROJECT_ROOT/backend"
 BIN_DIR="$PROJECT_ROOT/bin"
 OUT_DIR="$BACKEND_DIR/out"
 BCRYPT_DIR="$OUT_DIR/bcrypt"
+SSL_DIR="$OUT_DIR/ssl"
 
 echo "Platform : $ARCH"
 echo "Bitness  : $BITS-bit"
@@ -122,7 +123,8 @@ if [ "$BACKEND_DIR_FOUND" -eq 1 ] && [ -n "$DOCKER" ]; then
 
   echo ""
   echo "✅ Backend build completed successfully"
-  echo "➡ bcrypt copied to: $BIN_DIR/bcrypt"
+  echo "➡ bcrypt copied to: $BCRYPT_DIR"
+  echo "➡ ssl copied to: $SSL_DIR"
 fi
 
 # --------------------------------------------------
@@ -225,6 +227,10 @@ done
 # Cleanup
 rm -rf "$PROJECT_ROOT/.zip_tmp"
 if [ -n "$DOCKER" ]; then
+  echo "📦 Copying SSL → bin/"
+  sudo rm -rf "$BIN_DIR/ssl"y
+  sudo cp -r "$SSL_DIR" "$BIN_DIR/"
+  echo " Deleting → out/"
   echo "$BACKEND_DIR/out"
   sudo rm -rf "$BACKEND_DIR/out"
 fi

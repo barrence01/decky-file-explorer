@@ -1,7 +1,9 @@
-import { openPreview, loadDir, toggleSelect, selectedItems, currentPath,
+import { loadDir, toggleSelect, getSelectedItems, currentPath,
          toolbarButton, createNewFolder, startMove, startCopy, deleteSelected,
          renameSelected, showHidden, setShowHidden, showPropertiesModal
         } from './app.js';
+
+import { openPreview } from "./preview.js";
 
 import { downloadSelected, uploadFiles } from './upload.js';
 
@@ -24,7 +26,7 @@ export function addMobileRenderInteractions(div, f) {
         clearTimeout(pressTimer);
 
         if (!longPressTriggered) {
-            if(selectedItems == 0) {
+            if(getSelectedItems() && getSelectedItems().length == 0) {
                 if (f.isDir) {
                     loadDir(f.path);
                 } else if (f.type === "image" || f.type === "video") {
@@ -47,16 +49,21 @@ export function addMobileToolbarButtons(bar, selectionCount) {
     if (selectionCount === 0) {
       bar.appendChild(toolbarButton("Upload", "fas fa-upload", uploadFiles));
       menuItems.push({ label: "New Folder", action: createNewFolder });
-    } else {
-      bar.appendChild(toolbarButton("Move", "fas fa-arrows-alt", startMove));
-      bar.appendChild(toolbarButton("Copy", "fas fa-copy", startCopy));
+    } 
 
-      menuItems.push({ label: "Download", action: downloadSelected });
-      menuItems.push({ label: "Delete", action: deleteSelected });
+    if (selectionCount === 1) {
+        bar.appendChild(toolbarButton("Move", "fas fa-arrows-alt", startMove));
+        bar.appendChild(toolbarButton("Copy", "fas fa-copy", startCopy));
 
-      if (selectionCount === 1) {
         menuItems.push({ label: "Rename", action: renameSelected });
-      }
+        menuItems.push({ label: "Download", action: downloadSelected });
+    }
+    
+    if (selectionCount > 1) {
+        
+        bar.appendChild(toolbarButton("Move", "fas fa-arrows-alt", startMove));
+        bar.appendChild(toolbarButton("Copy", "fas fa-copy", startCopy));
+        menuItems.push({ label: "Download", action: downloadSelected });
     }
 
     menuItems.push({
@@ -71,6 +78,10 @@ export function addMobileToolbarButtons(bar, selectionCount) {
 
     if (selectionCount <= 1) {
       menuItems.push({ label: "Properties", action: showPropertiesModal });
+    }
+
+    if(selectionCount > 0) {
+        menuItems.push({ label: "Delete", action: deleteSelected });
     }
 
     bar.appendChild(createOverflowMenuButton(menuItems));

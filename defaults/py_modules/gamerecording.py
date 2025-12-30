@@ -1,8 +1,26 @@
 from pathlib import Path
 import subprocess
 import shutil
+import os
+import decky
 
 STEAM_USERDATA_DIR = Path.home() / ".local/share/Steam/userdata"
+
+def get_steam_dir() -> str:
+    import winreg
+    registry_paths = [
+        r"SOFTWARE\WOW6432Node\Valve\Steam",  # 64-bit Windows
+        r"SOFTWARE\Valve\Steam"               # 32-bit Windows
+    ]
+
+    for reg_path in registry_paths:
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path) as key:
+                return winreg.QueryValueEx(key, "InstallPath")[0]
+        except FileNotFoundError:
+            pass
+
+    return ""
 
 def convert_dash_folder_to_mp4(video_dir: str | Path, output_file: str | Path):
     video_dir = Path(video_dir)
@@ -31,10 +49,21 @@ def convert_dash_folder_to_mp4(video_dir: str | Path, output_file: str | Path):
 def scan_steam_recordings():
     results = []
 
-    if not STEAM_USERDATA_DIR.exists():
-        return results
+    steam_user_dir = ""
 
-    for user_dir in STEAM_USERDATA_DIR.iterdir():
+    if os.name == "nt":
+        decky.logger.info("scan_steam_recordings - Windows detected")
+        steam_dir = Path(get_steam_dir())
+        if not (steam_dir and steam_dir.exists()):
+            return results
+        steam_user_dir = steam_dir / "userdata"
+    else:      
+        decky.logger.info("scan_steam_recordings - Linux detected")
+        if not STEAM_USERDATA_DIR.exists():
+            return results
+        steam_user_dir = STEAM_USERDATA_DIR
+
+    for user_dir in steam_user_dir.iterdir():
         if not user_dir.is_dir():
             continue
 
@@ -70,7 +99,7 @@ def scan_steam_recordings():
 
     return results
 
-def assemble_dash_to_mp4(mpd_path: str, output_path: Path):
+def assemble_steam_clip(mpd_path: str, output_path: Path):
     if not output_path.parent.exists():
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -83,6 +112,29 @@ def assemble_dash_to_mp4(mpd_path: str, output_path: Path):
         "-loglevel", "error",
         "-i", mpd_path,
         "-c", "copy",
+        str(output_path)
+    ]
+
+    subprocess.run(cmd, check=True)
+
+def assemble_steam_clip_browser_compatible(mpd_path: str, output_path: Path):
+    if not shutil.which("ffmpeg"):
+        raise RuntimeError("ffmpeg not found in PATH")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-loglevel", "error",
+        "-i", mpd_path,
+        "-map", "0:v:0",
+        "-map", "0:a:0",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-movflags", "+faststart",
+
         str(output_path)
     ]
 

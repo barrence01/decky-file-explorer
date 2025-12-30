@@ -1,20 +1,21 @@
 import aiohttp
 from aiohttp import ClientConnectionResetError, web, BodyPartReader, MultipartReader
 from pathlib import Path
-from typing import Union
+from typing import Any, Union
 import asyncio
 import secrets
 import mimetypes
 import os
 import socket
 import bcrypt
-from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError
+from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError, get_all_drives, get_drive_root
 import decky
 import gamerecording
 import subprocess
+import ssl
 
 # Load user's settings
-from shared_settings import get_server_settings_manager, get_credentials_manager
+from shared_settings import get_server_settings_manager, get_credentials_manager, get_credentials_settings, get_server_settings
 settings_credentials = get_credentials_manager()
 settings_server = get_server_settings_manager()
 
@@ -32,18 +33,25 @@ if not BACKEND_DIR.exists():
     BACKEND_DIR = PLUGIN_DIR / "defaults/py_modules"
 
 WEBUI_DIR = BACKEND_DIR / "webui"
+SSL_CERT = PLUGIN_DIR / "bin/ssl/cert.pem"
+SSL_KEY = PLUGIN_DIR / "bin/ssl/key.pem"
 
 AUTH_COOKIE = "auth_token"
+AUTH_TOKEN_FIELD = "auth_tokens"
+
 DEFAULT_PORT = 8082
-DEFAULT_TIMEOUT_IN_SECONDS = 600 # 600s or 10m
+DEFAULT_HOST = "0.0.0.0"
+DEFAULT_TIMEOUT_IN_SECONDS = 600
 PASSWORD_FIELD = "password_hash"
 USERNAME_FIELD = "user_login"
+MAX_LOGIN_ATTEMPT_FIELD = "login_attempt"
+
 BASE_DIR_FIELD = "base_dir"
 PORT_FIELD = "port"
 HOST_FIELD = "host"
-MAX_LOGIN_ATTEMPT_FIELD = "login_attempt"
-AUTH_TOKEN_FIELD = "auth_tokens"
-DEFAULT_TIMEOUT_FIELD = "shutdown_timeout_seconds"
+SHUTDOWN_TIMEOUT_FIELD = "shutdown_timeout_seconds"
+
+
 
 # =========================
 # Exceptions
@@ -51,7 +59,6 @@ DEFAULT_TIMEOUT_FIELD = "shutdown_timeout_seconds"
 
 class PortAlreadyInUseError(Exception):
     pass
-
 
 # =========================
 # Middleware
@@ -94,11 +101,28 @@ async def auth_middleware(request, handler):
 
     return await handler(request)
 
+@web.middleware
+async def error_middleware(request, handler):
+    try:
+        return await handler(request)
+
+    except web.HTTPException as ex:
+        return web.json_response(
+            {"error": ex.reason},
+            status=ex.status
+        )
+
+    except Exception as ex:
+        return web.json_response(
+            {"error": str(ex)},
+            status=500
+        )
+
+
 # =========================
 # Util methods
 # =========================
 
-# Credential
 def hash_password(password: str) -> str:
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(password.encode(), salt).decode()
@@ -106,14 +130,46 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
-
 def check_credentials():
     login = settings_credentials.getSetting(USERNAME_FIELD)
     password = settings_credentials.getSetting(PASSWORD_FIELD)
     if(login is None or login.strip() == ''):
+        decky.logger.warning(f"check_credentials - username not found in settings, using default 'admin' instead")
         settings_credentials.setSetting(USERNAME_FIELD, "admin")
     if(password is None or password.strip() == ''):
+        decky.logger.warning(f"check_credentials - password not found in settings, using default 'admin' instead")
         settings_credentials.setSetting(PASSWORD_FIELD, hash_password("admin"))
+
+def check_server_settings():
+    host = settings_server.getSetting(HOST_FIELD)
+    if host is None or host.strip() == "":
+        decky.logger.warning(f"check_server_settings - host not found in settings, using default '{DEFAULT_HOST}' instead")
+        settings_server.setSetting(HOST_FIELD, DEFAULT_HOST)
+        
+    port = settings_server.getSetting(PORT_FIELD)
+    if port is None or port == "":
+        decky.logger.warning(f"check_server_settings - port not found in settings, using default '{DEFAULT_PORT}' instead")
+        settings_server.setSetting(PORT_FIELD, DEFAULT_PORT)
+
+    base_dir = settings_server.getSetting(BASE_DIR_FIELD)
+    if base_dir is None or base_dir.strip() == "":
+        decky.logger.warning(f"check_server_settings - base_dir not found in settings, using default '{str(os.path.expanduser('~'))}' instead")
+        settings_server.setSetting(BASE_DIR_FIELD, os.path.expanduser("~"))
+
+    shutdown_timeout = settings_server.getSetting(SHUTDOWN_TIMEOUT_FIELD)
+    if shutdown_timeout is None or shutdown_timeout == "":
+        decky.logger.warning(f"check_server_settings - shutdown_timeout not found in settings, using default '{DEFAULT_TIMEOUT_IN_SECONDS}' instead")
+        settings_server.setSetting(SHUTDOWN_TIMEOUT_FIELD, DEFAULT_TIMEOUT_IN_SECONDS)
+
+def increase_login_attempt_count() -> int:
+    server_settings = get_credentials_settings()
+    login_attempt_count = server_settings.get_login_attempts() + 1
+    settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, login_attempt_count)
+    return login_attempt_count
+
+def reset_login_attempt_count() -> int:
+    settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, 0)
+    return 0
 
 def reset_settings():
     settings_credentials.setSetting(USERNAME_FIELD, "admin")
@@ -121,50 +177,28 @@ def reset_settings():
     settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, 0)
     settings_server.setSetting(PORT_FIELD, DEFAULT_PORT)
     settings_server.setSetting(BASE_DIR_FIELD, os.path.expanduser("~"))
-    settings_server.setSetting(DEFAULT_TIMEOUT_FIELD, DEFAULT_TIMEOUT_IN_SECONDS)
+    settings_server.setSetting(SHUTDOWN_TIMEOUT_FIELD, DEFAULT_TIMEOUT_IN_SECONDS)
 
 # -------------------------------------------------------------------------------
 
+def create_ssl_context() -> ssl.SSLContext:
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    context.load_cert_chain(
+        certfile=str(SSL_CERT),
+        keyfile=str(SSL_KEY),
+    )
+    return context
+
 def get_file_system_service() -> FileSystemService:
+    server_settings = get_server_settings()
+    print(server_settings.get_base_dir())
     fs = None
     try:
-        fs = FileSystemService(get_base_dir())
+        fs = FileSystemService(server_settings.get_base_dir())
     except FileSystemError as e:
-        decky.logger.exception(f"The directory {get_base_dir()} doesn't exist, fallback to {os.path.expanduser('~')}")
+        decky.logger.exception(f"The directory {server_settings.get_base_dir()} doesn't exist, fallback to {os.path.expanduser('~')}")
         fs = FileSystemService(os.path.expanduser("~"))
     return fs
-
-def check_server_settings():
-    if not settings_server.getSetting(BASE_DIR_FIELD):
-        settings_server.setSetting(BASE_DIR_FIELD, os.path.expanduser("~"))
-    if not settings_server.getSetting(PORT_FIELD):
-        settings_server.setSetting(PORT_FIELD, DEFAULT_PORT)
-
-def get_base_dir() -> str:
-    base_dir = settings_server.getSetting(BASE_DIR_FIELD)
-    if not base_dir:
-        base_dir = os.path.expanduser("~")
-        settings_server.setSetting(BASE_DIR_FIELD, base_dir)
-    return base_dir
-
-def get_host_from_settings() -> str:
-    decky.logger.info("Getting host from settings: " + str(settings_server.getSetting(PORT_FIELD) or DEFAULT_PORT))
-    return settings_server.getSetting(HOST_FIELD) or "0.0.0.0"
-
-def get_port_from_settings() -> int:
-    decky.logger.info("Getting port from settings: " + str(settings_server.getSetting(PORT_FIELD) or DEFAULT_PORT))
-    return settings_server.getSetting(PORT_FIELD) or DEFAULT_PORT
-
-def get_time_to_shutdown_timeout() -> int:
-    """
-    Returns inactivity timeout in seconds.
-    Can be changed dynamically via settings.
-    """
-    timeout = int(settings_server.getSetting(DEFAULT_TIMEOUT_FIELD) or 0)
-    if not timeout:
-        timeout = DEFAULT_TIMEOUT_IN_SECONDS
-        settings_server.setSetting(DEFAULT_TIMEOUT_FIELD, timeout)
-    return timeout
 
 def get_videos_dir() -> Path:
     videos = Path.home() / "Videos"
@@ -175,8 +209,8 @@ class WebServer:
     def __init__(
         self,
         fs: FileSystemService = get_file_system_service(),
-        host=get_host_from_settings(),
-        port=get_port_from_settings()
+        host=get_server_settings().get_host(),
+        port=get_server_settings().get_port()
     ):
         self.webui_dir = WEBUI_DIR
         self.fs = fs
@@ -184,7 +218,7 @@ class WebServer:
         self.host = host
         self.port = port
 
-        self.app = web.Application(middlewares=[activity_middleware, auth_middleware])
+        self.app = web.Application(middlewares=[activity_middleware, error_middleware, auth_middleware])
         self.app["server"] = self
         self.app[AUTH_TOKEN_FIELD] = set()
 
@@ -197,6 +231,8 @@ class WebServer:
         self._shutdown_task: asyncio.Task | None = None
 
         check_credentials()
+        check_server_settings()
+
         self._setup_routes()
         self._setup_static()
 
@@ -213,12 +249,13 @@ class WebServer:
         self.app.router.add_post("/api/dir/download", self.download)
         self.app.router.add_post("/api/dir/delete", self.delete)
         self.app.router.add_post("/api/file/rename", self.rename)
-        self.app.router.add_post("/api/dir/paste", self.paste)
+        self.app.router.add_post("/api/dir/paste", self.paste_move)
         self.app.router.add_post("/api/dir/create", self.create_dir)
         self.app.router.add_get("/api/file/view", self.view_file)
         self.app.router.add_get("/api/steam/clips", self.list_steam_clips)
         self.app.router.add_post("/api/steam/clips/assemble", self.assemble_steam_clip)
         self.app.router.add_get("/api/steam/clips/thumbnail/{clipId}", self.get_steam_clip_thumbnail)
+        self.app.router.add_post("/api/drives/list", self.list_all_drives)
 
 
     def _setup_static(self):
@@ -248,22 +285,20 @@ class WebServer:
         if not input_login or not input_password:
             raise web.HTTPBadRequest(reason="Missing credentials")
         
-        login_attempt = int(settings_credentials.getSetting(MAX_LOGIN_ATTEMPT_FIELD) or 0)
-        if login_attempt > 10:
-            decky.logger.warning(f"The account has been locked for excess of attempts. This is attempt number {login_attempt}")
+        stored_credentials = get_credentials_settings()
+        login_attempt_count = increase_login_attempt_count()
+
+        if login_attempt_count > 10:
+            decky.logger.warning(f"The account has been locked for excess of attempts. This is attempt number {login_attempt_count}")
             return web.json_response(
                     {"error": "The account has been locked, please change the password and try again."},
                     status=403)
 
-        stored_login = str(settings_credentials.getSetting(USERNAME_FIELD))
-        stored_password = str(settings_credentials.getSetting(PASSWORD_FIELD)) # type: ignore
-
-        if (input_login != stored_login) or (not verify_password(input_password, stored_password)):
-            settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, login_attempt + 1)
+        if (input_login != stored_credentials.get_username()) or (not verify_password(input_password, stored_credentials.get_password_hash())):
             decky.logger.warning(f"Failed attempt to login in webUI")
             raise web.HTTPUnauthorized(reason="Wrong credential")
+        reset_login_attempt_count()
 
-        settings_credentials.setSetting(MAX_LOGIN_ATTEMPT_FIELD, 0)
         token = secrets.token_urlsafe(32)
         self.app[AUTH_TOKEN_FIELD].add(token)
 
@@ -272,7 +307,7 @@ class WebServer:
             AUTH_COOKIE,
             token,
             httponly=True,
-            secure=False,      
+            secure=True,      
             samesite="Strict"
         )
         decky.logger.info("Successful login")
@@ -291,7 +326,9 @@ class WebServer:
     
     @log_exceptions
     async def is_logged(self, request):
-        # If middleware let it pass, user is logged
+        """
+        Returns logged as true if user is still logged on
+        """
         return web.json_response({"logged": True})
 
     # --------------------
@@ -301,18 +338,23 @@ class WebServer:
         return web.json_response({"status": "ok"})
 
     @log_exceptions
-    async def list_dir(self, request):
+    async def list_dir(self, request: web.Request):
+        server_settings = get_server_settings()
         try:
             data = await request.json()
-            path = data.get("path", get_base_dir())
+            path = data.get("path")
         except Exception:
-            path = get_base_dir()
+            path = server_settings.get_base_dir()
 
         if not path:
-            path = get_base_dir()
+            path = server_settings.get_base_dir()
+
+        if path in ["/", "C:\\"]:
+            path = server_settings.get_base_dir()
 
         try:
             selected_dir = self.fs.get_object(path)
+            selected_drive = get_drive_root(path)
 
             if not selected_dir.isDir():
                 return web.json_response(
@@ -324,6 +366,7 @@ class WebServer:
 
             return web.json_response({
                 "selectedDir": selected_dir.to_dict(),
+                "selectedDrive":str(selected_drive),
                 "dirContent": [obj.to_dict() for obj in items]
             })
 
@@ -335,11 +378,13 @@ class WebServer:
     
     @log_exceptions
     async def delete(self, request: web.Request):
+        decky.logger.info("delete - Initiated")
         data = await request.json()
         paths = data.get("paths", [])
 
         if not paths:
             raise web.HTTPBadRequest(reason="No paths provided")
+        decky.logger.warning(f"delete - deleting files {paths}")
 
         try:
             for path in paths:
@@ -356,12 +401,14 @@ class WebServer:
     
     @log_exceptions
     async def rename(self, request: web.Request):
+        decky.logger.info("rename - Initiated")
         data = await request.json()
         path = data.get("path")
         new_name = data.get("newName")
 
         if not path or not new_name:
             raise web.HTTPBadRequest(reason="Missing rename data")
+        decky.logger.warning(f"rename - renaming file '{path}' to '{new_name}'")
 
         try:
             self.fs.rename(path, new_name)
@@ -370,7 +417,8 @@ class WebServer:
             return web.json_response({"error": str(e)}, status=400)
     
     @log_exceptions
-    async def paste(self, request: web.Request):
+    async def paste_move(self, request: web.Request):
+        decky.logger.info("paste_move - Initiated")
         data = await request.json()
 
         mode = data.get("mode")
@@ -380,6 +428,7 @@ class WebServer:
 
         if mode not in ("copy", "move"):
             raise web.HTTPBadRequest(reason="Invalid mode")
+        decky.logger.info(f"paste_move - with mode '{mode}' with overwrite_mode '{overwrite}' for '{paths}' to '{target_dir}'")
 
         conflicts = []
 
@@ -409,11 +458,13 @@ class WebServer:
     
     @log_exceptions
     async def create_dir(self, request: web.Request):
+        decky.logger.info("create_dir - Initiated")
         data = await request.json()
         path = data.get("path")
 
         if not path:
             raise web.HTTPBadRequest(reason="Missing path")
+        decky.logger.info(f"create_dir - Creating folder {path}")
 
         try:
             self.fs.create_dir(path)
@@ -533,6 +584,7 @@ class WebServer:
 
     @log_exceptions
     async def view_file(self, request: web.Request):
+        decky.logger.info("view_file - Initiated")
         path = request.query.get("path")
         if not path:
             raise web.HTTPBadRequest(reason="Missing path")
@@ -549,6 +601,7 @@ class WebServer:
 
         range_header = request.headers.get("Range")
 
+        decky.logger.info(f"view_file - Showing file {file_path}")
         if range_header:
             start, end = range_header.replace("bytes=", "").split("-")
             start = int(start)
@@ -615,6 +668,7 @@ class WebServer:
     # =========================
     @log_exceptions
     async def list_steam_clips(self, request: web.Request):
+        decky.logger.info("list_steam_clips - initiated")
         clips = gamerecording.scan_steam_recordings()
         return web.json_response({
             "count": len(clips),
@@ -627,14 +681,16 @@ class WebServer:
         Expects JSON:
         {
             "mpd": "/full/path/to/session.mpd",
-            "overwrite": false             # optional
+            "overwrite": false    
+            "browser_compatible": false
         }
         """
-
+        decky.logger.info("assemble_steam_clip - initiated")
         data = await request.json()
 
         mpd_path = data.get("mpd")
         overwrite = bool(data.get("overwrite", False))
+        browser_compatible = bool(data.get("browser_compatible", False))
 
         if not mpd_path:
             raise web.HTTPBadRequest(reason="Missing mpd path")
@@ -669,17 +725,27 @@ class WebServer:
         loop = asyncio.get_running_loop()
 
         try:
-            await loop.run_in_executor(
-                None,
-                gamerecording.assemble_dash_to_mp4,
-                str(mpd),
-                output_path
-            )
+            if browser_compatible:
+                await loop.run_in_executor(
+                    None,
+                    gamerecording.assemble_steam_clip_browser_compatible,
+                    str(mpd),
+                    output_path
+                )
+            else:
+                await loop.run_in_executor(
+                    None,
+                    gamerecording.assemble_steam_clip,
+                    str(mpd),
+                    output_path
+                )
         except subprocess.CalledProcessError:
             raise web.HTTPInternalServerError(reason="FFmpeg failed assembling clip")
         except Exception as e:
             raise web.HTTPInternalServerError(reason=str(e))
 
+        decky.logger.info(f"Video assembled and moved to {videos_dir}")
+        
         return web.json_response({
             "status": "ok",
             "output": str(output_path),
@@ -706,6 +772,21 @@ class WebServer:
 
         raise web.HTTPNotFound(reason="Thumbnail not found")
 
+    @log_exceptions
+    async def list_all_drives(self, request: web.Request):
+        external_mounts = get_all_drives()
+
+        data = await request.json()
+        path = data.get("path")
+        currentDrive = os.path.expanduser("~")
+
+        if path:
+            currentDrive = get_drive_root(path)
+
+        return web.json_response({
+            "currentDrive": str(currentDrive),
+            "drives":[obj.to_dict() for obj in external_mounts]
+        })
 
     # --------------------
     # SERVER LIFECYCLE
@@ -713,14 +794,20 @@ class WebServer:
     async def start(self):
         decky.logger.info("Starting webUI server.")
         try:
+            # Config
+            ssl_context = create_ssl_context()
+            server_settings = get_server_settings()
+
+            # Runner
             self.runner = web.AppRunner(self.app)
             await self.runner.setup()
-            self.host = get_host_from_settings()
-            self.port = get_port_from_settings()
+            self.host = server_settings.get_host()
+            self.port = server_settings.get_port()
             self.site = web.TCPSite(
                 self.runner,
                 host=self.host,
-                port=self.port
+                port=self.port,
+                ssl_context=ssl_context
             )
 
             await self.site.start()
@@ -771,7 +858,7 @@ class WebServer:
             while True:
                 await asyncio.sleep(5)
 
-                timeout = get_time_to_shutdown_timeout()
+                timeout = get_server_settings().get_shutdown_timeout()
                 now = loop.time()
 
                 inactive_for = now - self._last_activity
