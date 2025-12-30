@@ -33,7 +33,7 @@ else
 fi
 
 # --------------------------------------------------
-# Build
+# Build - bcrypt
 # --------------------------------------------------
 
 echo "=== Getting python executable ==="
@@ -50,11 +50,28 @@ python3 -m pip install bcrypt --no-deps --target /tmp/bcrypt_pkg
 
 
 # --------------------------------------------------
-# Output
+# Output - bcrypt
 # --------------------------------------------------
 
 echo "=== Copying Python package files ==="
 cp -r /tmp/bcrypt_pkg/bcrypt/* ./out/bcrypt/
+
+# --------------------------------------------------
+# Creating SSL
+# --------------------------------------------------
+echo "=== Creating ssl folder and files ==="
+mkdir -p ./out/ssl
+realpath ./out/ssl
+
+openssl req -x509 -newkey rsa:4096 -keyout ./out/ssl/key.pem -out ./out/ssl/cert.pem -days 365 -nodes -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost" 2>/dev/null
+
+chmod 644 ./out/ssl/*.pem 2>/dev/null || true
+
+cp ./out/ssl/key.pem ./out/ssl/privatekey.pem 2>/dev/null || true
+cp ./out/ssl/cert.pem ./out/ssl/certificate.pem 2>/dev/null || true
+
+echo "=== ssl files created in ./out/ssl/ ==="
+ls -la ./out/ssl/
 
 # --------------------------------------------------
 # Verification

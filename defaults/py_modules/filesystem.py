@@ -54,7 +54,7 @@ class DriveInfo:
 def get_windows_drives() -> list[DriveInfo]:
     import ctypes
     drives = []
-    kernel32 = ctypes.windll.kernel32
+    kernel32 = ctypes.windll.kernel32 # type: ignore
 
     bitmask = kernel32.GetLogicalDrives()
 

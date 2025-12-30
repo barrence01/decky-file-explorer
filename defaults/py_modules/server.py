@@ -33,8 +33,8 @@ if not BACKEND_DIR.exists():
     BACKEND_DIR = PLUGIN_DIR / "defaults/py_modules"
 
 WEBUI_DIR = BACKEND_DIR / "webui"
-SSL_CERT = PLUGIN_DIR / "bin/SSL/cert.pem"
-SSL_KEY = PLUGIN_DIR / "bin/SSL/key.pem"
+SSL_CERT = PLUGIN_DIR / "bin/ssl/cert.pem"
+SSL_KEY = PLUGIN_DIR / "bin/ssl/key.pem"
 
 AUTH_COOKIE = "auth_token"
 AUTH_TOKEN_FIELD = "auth_tokens"
