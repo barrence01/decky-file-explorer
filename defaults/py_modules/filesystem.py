@@ -94,7 +94,7 @@ def is_path_on_c_drive(path: Path) -> bool:
     return p.drive.upper() == "C:"
 
 # ----- LINUX ----- 
-def get_linux_drives() -> list[DriveInfo]:
+def get_linux_drives(_show_only_accessible = True) -> list[DriveInfo]:
     result = subprocess.run(
         ["lsblk", "-J", "-o", "NAME,TYPE,RM,SIZE,MOUNTPOINT,FSTYPE,TRAN"],
         capture_output=True,
@@ -113,7 +113,9 @@ def get_linux_drives() -> list[DriveInfo]:
                 yield from walk([c])
 
     for dev in walk(data["blockdevices"]):
-        if not dev.get("mountpoint"):
+        mount = dev.get("mountpoint")
+
+        if not mount:
             continue
 
         if dev.get("type") not in ("part", "disk"):
@@ -122,9 +124,13 @@ def get_linux_drives() -> list[DriveInfo]:
         if dev.get("fstype") in ("swap"):
             continue
 
+        if _show_only_accessible:
+            if not os.access(Path(mount), os.R_OK | os.X_OK):
+                continue
+
         drives.append(
             DriveInfo(
-                path=Path(dev["mountpoint"]),
+                path=Path(mount),
                 fstype=dev.get("fstype"),
                 removable=bool(dev.get("rm")) or dev.get("tran") in ("usb", "mmc"),
                 transport=dev.get("tran"),

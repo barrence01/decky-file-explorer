@@ -12,6 +12,7 @@ from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsErro
 import decky
 import gamerecording
 import subprocess
+import ssl
 
 # Load user's settings
 from shared_settings import get_server_settings_manager, get_credentials_manager, get_credentials_settings, get_server_settings
@@ -32,6 +33,8 @@ if not BACKEND_DIR.exists():
     BACKEND_DIR = PLUGIN_DIR / "defaults/py_modules"
 
 WEBUI_DIR = BACKEND_DIR / "webui"
+SSL_CERT = PLUGIN_DIR / "bin/SSL/cert.pem"
+SSL_KEY = PLUGIN_DIR / "bin/SSL/key.pem"
 
 AUTH_COOKIE = "auth_token"
 AUTH_TOKEN_FIELD = "auth_tokens"
@@ -178,6 +181,14 @@ def reset_settings():
 
 # -------------------------------------------------------------------------------
 
+def create_ssl_context() -> ssl.SSLContext:
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    context.load_cert_chain(
+        certfile=str(SSL_CERT),
+        keyfile=str(SSL_KEY),
+    )
+    return context
+
 def get_file_system_service() -> FileSystemService:
     server_settings = get_server_settings()
     print(server_settings.get_base_dir())
@@ -296,7 +307,7 @@ class WebServer:
             AUTH_COOKIE,
             token,
             httponly=True,
-            secure=False,      
+            secure=True,      
             samesite="Strict"
         )
         decky.logger.info("Successful login")
@@ -783,7 +794,11 @@ class WebServer:
     async def start(self):
         decky.logger.info("Starting webUI server.")
         try:
+            # Config
+            ssl_context = create_ssl_context()
             server_settings = get_server_settings()
+
+            # Runner
             self.runner = web.AppRunner(self.app)
             await self.runner.setup()
             self.host = server_settings.get_host()
@@ -791,7 +806,8 @@ class WebServer:
             self.site = web.TCPSite(
                 self.runner,
                 host=self.host,
-                port=self.port
+                port=self.port,
+                ssl_context=ssl_context
             )
 
             await self.site.start()
