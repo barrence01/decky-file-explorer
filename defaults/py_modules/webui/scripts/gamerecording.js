@@ -88,6 +88,7 @@ async function assembleVideo(_overwrite = false, _browser_compatible) {
         assembleVideo(true, _browser_compatible);
       }
     }
+    clearClipboard();
     showSuccess("The video has been assembled. You can find it in the 'Videos' folder.")
   });
 }

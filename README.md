@@ -10,19 +10,28 @@ You need to go to: `Steam > Settings > in-game` and there should have an option 
 For videos, you'd need to change it in `Steam > Settings > game recording`, but the actual video file won't be playable until you assemble the files on steam panel.
 I have added a feature in the hamburguer button to simplify this process, there you will have options to assemble the video, but it may use some CPU from your Steam Deck.
 
-This plugin uses bcrypt lib and it needs to be compiled. There a 2 ways to add it.
+## Installation
 
-First way: Install through `pip install bcrypt`
+There are several ways to install this plugin:
 
-Second way: Install using docker:
-    
-    cd /backend/
-    ### Build Docker Image
-    sudo docker build -t bcrypt-builder .
-    ### Build binary
-    sudo docker run --rm -v "$(pwd)":/backend bcrypt-builder
+### 1. Install from Releases (recommended)
 
-* The output will be on `backend/out`, you need to copy the file to `bin/` or run `scripts/build-script.sh`
+1. Go to the **Releases** section and download the most recent plugin `.zip`.
+2. Open **Decky Loader** on your Steam Deck.
+3. Click the **cog (⚙️) menu** and enable **Developer Mode**.
+4. A new **Developer** option will appear in the sidebar.
+5. From there, choose **Install plugin from ZIP** and select the downloaded file.
+
+---
+
+### 2. Build using the provided script
+
+1. In the `scripts/` folder, run the `build-plugin.sh` script.
+2. This will generate the plugin `.zip` file for you.
+
+**Requirements:**
+- Node.js
+- Docker
 
 
 # Main menu of the plugin
