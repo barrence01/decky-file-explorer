@@ -121,7 +121,7 @@ const Content: React.FC = () => {
               padding: '10px'
             }}>
               <QRCodeSVG
-                value={`http://${serverStatus.ipv4_address}:${serverStatus.port}`}
+                value={`https://${serverStatus.ipv4_address}:${serverStatus.port}`}
                 size={256}
                 level="H"
                 includeMargin={true}
@@ -133,7 +133,7 @@ const Content: React.FC = () => {
                 wordBreak: 'break-all',
                 marginTop: '8px'
               }}>
-                {`http://${serverStatus.ipv4_address}:${serverStatus.port}`}
+                {`https://${serverStatus.ipv4_address}:${serverStatus.port}`}
               </div>
             </div>
           </PanelSectionRow>
