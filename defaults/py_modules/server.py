@@ -78,6 +78,8 @@ REQUEST_TIMEOUT_EXEMPT_PATHS = frozenset({
     "/api/steam/clips/assemble",
 })
 
+SPA_ROUTES = ("/login", "/files", "/recordings")
+
 EXECUTOR_MAX_WORKERS = 4
 
 
@@ -470,7 +472,9 @@ class WebServer:
 
     def _setup_routes(self):
         self.app.router.add_get("/", self.index)
-        
+        for route in SPA_ROUTES:
+            self.app.router.add_get(route, self.index)
+
         self.app.router.add_post("/api/login", self.login)
         self.app.router.add_get("/api/logoff", self.logoff)
         self.app.router.add_get("/api/login/is-logged", self.is_logged)

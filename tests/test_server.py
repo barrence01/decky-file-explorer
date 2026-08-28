@@ -115,6 +115,14 @@ async def test_login_missing_fields(client):
     assert res.status == 400
 
 
+@pytest.mark.asyncio
+async def test_spa_routes_serve_index(client):
+    for route in ("/files", "/login", "/recordings"):
+        res = await client.get(route)
+        assert res.status == 200
+        assert await res.text() == "<html>OK</html>"
+
+
 # ------------------------
 # DIRECTORY LIST
 # ------------------------
