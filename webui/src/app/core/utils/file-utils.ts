@@ -1,22 +1,91 @@
 import { getFileNameFromPath } from './path-utils';
 
-export const HIGHLIGHT_FOLDERS = [
-  'Downloads',
-  'Pictures',
-  'Videos',
-  'Music',
-  'Desktop',
-  'Documents',
-  'Homebrew',
-  'Emudeck',
-  'Plugins',
-  'Emulation',
-  'Applications',
-  'Logs',
-  'Data',
-  'Settings',
-  'Favorites',
-].map((name) => name.toLowerCase());
+const HIGHLIGHT_FOLDER_GROUPS = [
+  [
+    'Desktop',
+    'Área de trabalho',
+    'Escritorio',
+    'Bureau',
+    'Schreibtisch',
+    'Scrivania',
+  ],
+  [
+    'Documents',
+    'Documentos',
+    'Dokumente',
+    'Documenti',
+  ],
+  [
+    'Downloads',
+    'Transferências',
+    'Descargas',
+    'Téléchargements',
+    'Herunterladen',
+    'Download',
+  ],
+  [
+    'Pictures',
+    'Imagens',
+    'Imágenes',
+    'Images',
+    'Bilder',
+    'Immagini',
+  ],
+  [
+    'Music',
+    'Música',
+    'Musique',
+    'Musik',
+    'Musica',
+  ],
+  [
+    'Videos',
+    'Vídeos',
+    'Vidéos',
+    'Video',
+  ],
+  [
+    'Settings',
+    'Configurações',
+    'Ajustes',
+    'Paramètres',
+    'Einstellungen',
+    'Impostazioni',
+  ],
+  [
+    'Favorites',
+    'Favoritos',
+    'Favoris',
+    'Favoriten',
+    'Preferiti',
+  ],
+  [
+    'Applications',
+    'Aplicativos',
+    'Aplicaciones',
+    'Programme',
+  ],
+  ['Homebrew'],
+  ['Emudeck'],
+  ['Plugins'],
+  ['Emulation'],
+  ['Logs'],
+  ['Data'],
+];
+
+function normalizeFolderName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+const HIGHLIGHT_FOLDER_NAMES = new Set(
+  HIGHLIGHT_FOLDER_GROUPS.flat().map(normalizeFolderName)
+);
+
+export const HIGHLIGHT_FOLDERS = [...HIGHLIGHT_FOLDER_NAMES];
 
 export function truncateString(value: string, maxLength: number): string {
   if (value.length <= maxLength) {
@@ -55,8 +124,7 @@ export function shouldHighlightFolder(file: { isDir: boolean; path: string }): b
     return false;
   }
 
-  const name = getFileName(file).toLowerCase();
-  return HIGHLIGHT_FOLDERS.includes(name);
+  return HIGHLIGHT_FOLDER_NAMES.has(normalizeFolderName(getFileName(file)));
 }
 
 export function isCompactView(): boolean {
