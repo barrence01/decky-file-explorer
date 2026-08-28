@@ -2,7 +2,6 @@ import { Component, ElementRef, EventEmitter, HostListener, Output, inject } fro
 import { DriveStateService } from '../../../core/services/drive-state.service';
 import { FileExplorerStateService } from '../../../core/services/file-system.service';
 import { DriveInfo } from '../../../core/models/drive.model';
-import { truncateStringStart } from '../../../core/utils/file-utils';
 
 @Component({
   selector: 'app-drive-selector',
@@ -16,7 +15,7 @@ import { truncateStringStart } from '../../../core/utils/file-utils';
         [title]="driveState.currentDrive()"
       >
         <i class="fas fa-hard-drive"></i>
-        <span>{{ truncateStringStart(driveState.currentDrive(), 24) }}</span>
+        <span>{{ driveState.currentDrive() }}</span>
         <i class="fas fa-chevron-down"></i>
       </button>
       @if (driveState.showPicker()) {
@@ -61,8 +60,9 @@ import { truncateStringStart } from '../../../core/utils/file-utils';
     .drive-selector__trigger span {
       direction: rtl;
       text-align: left;
+      min-width: 0;
+      flex: 1;
       overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -111,7 +111,6 @@ export class DriveSelectorComponent {
   readonly driveState = inject(DriveStateService);
   private readonly explorerState = inject(FileExplorerStateService);
   private readonly elementRef = inject(ElementRef);
-  readonly truncateStringStart = truncateStringStart;
 
   async onTriggerClick(event: MouseEvent): Promise<void> {
     event.stopPropagation();

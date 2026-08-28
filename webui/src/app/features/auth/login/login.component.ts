@@ -1,6 +1,5 @@
 import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
@@ -10,15 +9,33 @@ import { AuthService } from '../../../core/services/auth.service';
   template: `
     <div class="login-view">
       <div class="login-box">
-        <h2>Login</h2>
-        <input type="text" [(ngModel)]="username" placeholder="Login" />
-        <input
-          type="password"
-          [(ngModel)]="password"
-          placeholder="Password"
-          (keydown.enter)="submit()"
-        />
-        <button type="button" (click)="submit()">Login</button>
+        <form
+          action="/api/login"
+          method="post"
+          autocomplete="on"
+          (ngSubmit)="submit()"
+        >
+          <h2>Login</h2>
+          <input
+            type="text"
+            id="login"
+            name="login"
+            autocomplete="username"
+            [(ngModel)]="username"
+            placeholder="Login"
+            required
+          />
+          <input
+            type="password"
+            id="password"
+            name="password"
+            autocomplete="current-password"
+            [(ngModel)]="password"
+            placeholder="Password"
+            required
+          />
+          <button type="submit">Login</button>
+        </form>
       </div>
     </div>
   `,
@@ -28,12 +45,11 @@ export class LoginComponent {
   password = '';
 
   private readonly authService = inject(AuthService);
-  private readonly router = inject(Router);
 
   async submit(): Promise<void> {
     await this.authService.login(this.username, this.password);
     if (this.authService.isLoggedIn()) {
-      await this.router.navigate(['/files']);
+      window.location.assign('/files');
     }
   }
 }

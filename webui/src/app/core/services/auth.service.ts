@@ -37,7 +37,7 @@ export class AuthService {
             { withCredentials: true }
           )
         );
-        await this.checkSession();
+        this.isLoggedIn.set(true);
       } catch (error) {
         this.isLoggedIn.set(false);
         this.feedbackService.showError(this.extractLoginError(error));
