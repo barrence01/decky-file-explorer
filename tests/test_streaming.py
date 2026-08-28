@@ -1,5 +1,8 @@
 import pytest
-from filesystem import FileAlreadyExistsError
+import pytest_asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+from filesystem import FileAlreadyExistsError, iter_file_chunks, read_file_chunk
 
 def test_stream_read_and_write(fs):
     data = b"x" * (1024 * 1024)
@@ -45,3 +48,34 @@ def test_stream_read_non_file(fs):
 
     with pytest.raises(FileNotFoundError):
         list(fs.stream_read("dir"))
+
+
+@pytest.mark.asyncio
+async def test_read_file_chunk(fs):
+    data = b"0123456789"
+    fs.create_file("file.bin", data)
+
+    assert read_file_chunk(fs.base_dir / "file.bin", 2, 4) == b"2345"
+
+
+@pytest.mark.asyncio
+async def test_iter_file_chunks(fs):
+    data = b"A" * 100
+    fs.create_file("file.bin", data)
+    executor = ThreadPoolExecutor(max_workers=1)
+
+    try:
+        chunks = [
+            chunk
+            async for chunk in iter_file_chunks(
+                fs.base_dir / "file.bin",
+                executor,
+                chunk_size=10,
+            )
+        ]
+    finally:
+        executor.shutdown(wait=False)
+
+    assert len(chunks) == 10
+    assert b"".join(chunks) == data
+

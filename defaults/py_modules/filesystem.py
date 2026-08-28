@@ -601,6 +601,35 @@ class FileSystemService:
         return buffer
 
 
+def read_file_chunk(path: Path, offset: int, size: int) -> bytes:
+    with open(path, "rb") as file:
+        file.seek(offset)
+        return file.read(size)
+
+
+async def iter_file_chunks(
+    path: Path,
+    executor,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    start: int = 0,
+    length: int | None = None,
+):
+    from utils import run_sync
+
+    offset = start
+    remaining = length
+
+    while remaining is None or remaining > 0:
+        read_size = min(chunk_size, remaining) if remaining is not None else chunk_size
+        chunk = await run_sync(read_file_chunk, path, offset, read_size, executor=executor)
+        if not chunk:
+            break
+        yield chunk
+        offset += len(chunk)
+        if remaining is not None:
+            remaining -= len(chunk)
+
+
 # =========================
 # aiohttp Handlers
 # =========================

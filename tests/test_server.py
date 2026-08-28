@@ -1,11 +1,14 @@
 import pytest
 import pytest_asyncio
+import asyncio
+import time
 from pathlib import Path
 from aiohttp import FormData
 from aiohttp.test_utils import TestClient
 
 from filesystem import FileSystemService
-from server import WebServer, AUTH_COOKIE
+import server
+from server import WebServer, AUTH_COOKIE, _sync_list_dir_payload
 
 # ------------------------
 # FIXTURES
@@ -727,4 +730,151 @@ async def test_assemble_clip_conflict(client, monkeypatch, tmp_path):
     )
 
     assert res.status == 409
+
+
+# ------------------------
+# REQUEST TIMEOUT
+# ------------------------
+
+@pytest.mark.asyncio
+async def test_request_timeout_returns_504(aiohttp_client, monkeypatch):
+    import asyncio
+    from aiohttp import web
+
+    import server
+
+    monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.1)
+
+    async def slow_ping(request):
+        await asyncio.sleep(0.3)
+        return web.json_response({"status": "ok"})
+
+    app = web.Application(middlewares=[server.request_timeout_middleware])
+    app.router.add_get("/api/ping", slow_ping)
+
+    client = await aiohttp_client(app)
+    res = await client.get("/api/ping")
+
+    assert res.status == 504
+    data = await res.json()
+    assert data["error"] == "Request timed out"
+
+
+@pytest.mark.asyncio
+async def test_request_timeout_exempt_download(aiohttp_client, monkeypatch):
+    import asyncio
+    from aiohttp import web
+
+    import server
+
+    monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.1)
+
+    async def slow_download(request):
+        await asyncio.sleep(0.3)
+        return web.json_response({"status": "ok"})
+
+    app = web.Application(middlewares=[server.request_timeout_middleware])
+    app.router.add_post("/api/dir/download", slow_download)
+
+    client = await aiohttp_client(app)
+    res = await client.post("/api/dir/download", json={"paths": ["file.txt"]})
+
+    assert res.status == 200
+    assert (await res.json())["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_request_timeout_exempt_upload(aiohttp_client, monkeypatch):
+    import asyncio
+    from aiohttp import web
+
+    import server
+
+    monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.1)
+
+    async def slow_upload(request):
+        await asyncio.sleep(0.3)
+        return web.json_response({"status": "ok"})
+
+    app = web.Application(middlewares=[server.request_timeout_middleware])
+    app.router.add_post("/api/dir/upload", slow_upload)
+
+    client = await aiohttp_client(app)
+    res = await client.post("/api/dir/upload")
+
+    assert res.status == 200
+
+
+@pytest.mark.asyncio
+async def test_request_timeout_exempt_view_file(aiohttp_client, monkeypatch):
+    import asyncio
+    from aiohttp import web
+
+    import server
+
+    monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.1)
+
+    async def slow_view(request):
+        await asyncio.sleep(0.3)
+        return web.Response(body=b"content")
+
+    app = web.Application(middlewares=[server.request_timeout_middleware])
+    app.router.add_get("/api/file/view", slow_view)
+
+    client = await aiohttp_client(app)
+    res = await client.get("/api/file/view?path=file.txt")
+
+    assert res.status == 200
+    assert await res.read() == b"content"
+
+
+@pytest.mark.asyncio
+async def test_request_timeout_exempt_assemble_clip(aiohttp_client, monkeypatch):
+    import asyncio
+    from aiohttp import web
+
+    import server
+
+    monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.1)
+
+    async def slow_assemble(request):
+        await asyncio.sleep(0.3)
+        return web.json_response({"status": "ok"})
+
+    app = web.Application(middlewares=[server.request_timeout_middleware])
+    app.router.add_post("/api/steam/clips/assemble", slow_assemble)
+
+    client = await aiohttp_client(app)
+    res = await client.post("/api/steam/clips/assemble", json={"mpd": "/tmp/session.mpd"})
+
+    assert res.status == 200
+
+
+@pytest.mark.asyncio
+async def test_event_loop_not_blocked_by_slow_list_dir(client, monkeypatch):
+    await login(client)
+
+    original = _sync_list_dir_payload
+
+    def slow_list_dir_payload(fs, path):
+        time.sleep(0.5)
+        return original(fs, path)
+
+    monkeypatch.setattr(server, "_sync_list_dir_payload", slow_list_dir_payload)
+
+    list_task = asyncio.create_task(
+        client.post("/api/dir/list", json={"path": ""})
+    )
+
+    await asyncio.sleep(0.05)
+
+    started = time.monotonic()
+    ping_res = await client.get("/api/ping")
+    elapsed = time.monotonic() - started
+
+    assert ping_res.status == 200
+    assert elapsed < 0.2
+
+    list_res = await list_task
+    assert list_res.status == 200
 

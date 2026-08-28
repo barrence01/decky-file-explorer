@@ -237,3 +237,5 @@ defaults/py_modules/webui/*
 instructions.txt
 SSL
 ssl
+
+decky-file-explorer.zip
