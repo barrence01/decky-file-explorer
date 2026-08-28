@@ -104,10 +104,13 @@ if [ "$BACKEND_DIR_FOUND" -eq 1 ]; then
   if [ "$BITS" = "32" ]; then
     $CONTAINER_ENGINE run --rm \
       -v "$BACKEND_DIR:/backend" \
+      -v "$PROJECT_ROOT:/project" \
       bcrypt-builder
   else
     $CONTAINER_ENGINE run --rm \
-      --platform=linux/amd64 -v "$(pwd)":/backend \
+      --platform=linux/amd64 \
+      -v "$BACKEND_DIR:/backend" \
+      -v "$PROJECT_ROOT:/project" \
       bcrypt-builder
   fi
 
@@ -135,6 +138,23 @@ if [ "$BACKEND_DIR_FOUND" -eq 1 ]; then
   echo "➡ bcrypt copied to: $BCRYPT_DIR"
   echo "➡ ssl copied to: $SSL_DIR"
 fi
+
+WEBUI_INDEX="$PROJECT_ROOT/defaults/py_modules/webui/index.html"
+
+if [ ! -f "$WEBUI_INDEX" ]; then
+  echo "⚠️  Angular webui build output not found after container build"
+  echo "🚧 Building Angular webui locally..."
+  cd "$PROJECT_ROOT/webui"
+  pnpm install --frozen-lockfile
+  pnpm run build
+fi
+
+if [ ! -f "$WEBUI_INDEX" ]; then
+  echo "❌ Angular webui build output not found at $WEBUI_INDEX"
+  exit 1
+fi
+
+echo "✅ Angular webui build found at $WEBUI_INDEX"
 
 # --------------------------------------------------
 # PNPM CHECK
@@ -216,6 +236,11 @@ DIRS=(
 # Validate build output
 if [ ! -d "$PROJECT_ROOT/dist" ]; then
   echo "❌ dist/ folder not found — build failed?"
+  exit 1
+fi
+
+if [ ! -f "$WEBUI_INDEX" ]; then
+  echo "❌ defaults/py_modules/webui/index.html not found — webui build failed?"
   exit 1
 fi
 

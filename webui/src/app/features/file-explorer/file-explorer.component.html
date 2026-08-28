@@ -1,0 +1,162 @@
+<div id="fileView">
+  <div class="toolbar" id="toolbar">
+    @if (state.clipboardItems.length > 0) {
+      <button class="btn-interactive" type="button" disabled>
+        <i class="fas fa-clipboard"></i>
+        <span>{{ state.clipboardItems.length }} item(s)</span>
+      </button>
+      <button class="btn-interactive" type="button" (click)="pasteClipboard()">
+        <i class="fas fa-paste"></i>
+        <span>Paste</span>
+      </button>
+      <button class="btn-interactive" type="button" (click)="clearClipboard()">
+        <i class="fas fa-times"></i>
+        <span>Cancel</span>
+      </button>
+    } @else {
+      <button
+        class="btn-interactive"
+        type="button"
+        [disabled]="!parentPath"
+        (click)="loadDirectory(parentPath)"
+      >
+        <i class="fas fa-arrow-left"></i>
+        <span>Up</span>
+      </button>
+      <button class="btn-interactive" type="button" (click)="loadDirectory(state.currentPath)">
+        <i class="fas fa-rotate-right"></i>
+        <span>Refresh</span>
+      </button>
+
+      @if (isMobile()) {
+        @if (state.selectedItems.length === 0) {
+          <button class="btn-interactive" type="button" (click)="uploadFiles()">
+            <i class="fas fa-upload"></i>
+            <span>Upload</span>
+          </button>
+        }
+        @if (state.selectedItems.length > 0) {
+          <button class="btn-interactive" type="button" (click)="startMove()">
+            <i class="fas fa-arrows-alt"></i>
+            <span>Move</span>
+          </button>
+          <button class="btn-interactive" type="button" (click)="startCopy()">
+            <i class="fas fa-copy"></i>
+            <span>Copy</span>
+          </button>
+        }
+        <div class="overflow-menu">
+          <button class="toolbar-btn btn-interactive" type="button" (click)="openOverflowMenu(buildOverflowMenu())">
+            <i class="fas fa-ellipsis-vertical"></i>
+          </button>
+          @if (overflowMenuOpen()) {
+            <div class="overflow-menu-content">
+              @for (item of overflowMenuItems(); track item.label) {
+                <div class="overflow-menu-item" (click)="runOverflowAction(item)">
+                  @if (item.checked !== undefined) {
+                    <input type="checkbox" [checked]="item.checked" />
+                    <span>{{ item.label }}</span>
+                  } @else {
+                    {{ item.label }}
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+        @if (state.selectedItems.length === 0) {
+          <button class="btn-interactive" type="button" (click)="uploadFiles()">
+            <i class="fas fa-upload"></i>
+            <span>Upload</span>
+          </button>
+        } @else {
+          <button class="btn-interactive" type="button" (click)="startMove()">
+            <i class="fas fa-arrows-alt"></i>
+            <span>Move</span>
+          </button>
+          <button class="btn-interactive" type="button" (click)="startCopy()">
+            <i class="fas fa-copy"></i>
+            <span>Copy</span>
+          </button>
+        }
+
+        @if (state.selectedItems.length > 0) {
+          <button class="btn-interactive" type="button" (click)="downloadSelected()">
+            <i class="fas fa-download"></i>
+            <span>Download</span>
+          </button>
+          <button class="btn-interactive" type="button" (click)="deleteSelected()">
+            <i class="fas fa-trash"></i>
+            <span>Delete</span>
+          </button>
+        }
+
+        @if (state.selectedItems.length === 1) {
+          <button class="btn-interactive" type="button" (click)="renameSelected()">
+            <i class="fas fa-i-cursor"></i>
+            <span>Rename</span>
+          </button>
+        }
+
+        <button class="btn-interactive" type="button" (click)="createNewFolder()">
+          <i class="fas fa-folder-plus"></i>
+          <span>New Folder</span>
+        </button>
+
+        @if (state.selectedItems.length <= 1) {
+          <button class="btn-interactive" type="button" (click)="showProperties()">
+            <i class="fas fa-circle-info"></i>
+            <span>Properties</span>
+          </button>
+        }
+
+        <label class="show-hidden-toggle">
+          <input
+            type="checkbox"
+            [checked]="state.showHidden"
+            (change)="toggleShowHidden()"
+          />
+          <span>Show hidden</span>
+        </label>
+      }
+    }
+  </div>
+
+  <div class="file-list" id="fileList">
+    @for (file of visibleFiles; track file.path) {
+      <div
+        class="file-item"
+        [class.highlight-folder]="shouldHighlightFolder(file)"
+        [class.hidden-file]="file.isHidden"
+        [class.protected-file]="file.isProtected"
+        [title]="shouldHighlightFolder(file) ? 'Important folder' : ''"
+        [class.selected]="state.selectedItems.includes(file)"
+        (click)="!isMobile() && !file.isProtected && onDesktopClick($event, file)"
+        (dblclick)="!isMobile() && !file.isProtected && onDesktopDoubleClick(file)"
+        appLongPress
+        (longPress)="isMobile() && !file.isProtected && onMobileLongPress(file, $event)"
+        (shortPress)="isMobile() && !file.isProtected && onMobileShortPress(file, $event)"
+      >
+        <i [class]="getFileIconClass(file)"></i>
+        <div class="file-name">{{ truncateString(getFileName(file), 50) }}</div>
+      </div>
+    }
+  </div>
+</div>
+
+<app-properties-modal
+  [visible]="propertiesVisible()"
+  [target]="propertiesTarget"
+  (close)="closeProperties()"
+/>
+
+<app-preview-modal
+  [visible]="previewVisible()"
+  mode="file"
+  [file]="previewFile()"
+  (close)="closePreview()"
+  (download)="downloadPreview()"
+/>
+
+<app-upload-modal [visible]="uploadVisible()" [progress]="uploadProgress()" />

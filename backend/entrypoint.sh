@@ -74,15 +74,46 @@ echo "=== ssl files created in ./out/ssl/ ==="
 ls -la ./out/ssl/
 
 # --------------------------------------------------
+# Build - Angular webui
+# --------------------------------------------------
+
+if [ -d "/project/webui" ]; then
+  echo "=== Preparing Node.js for webui build ==="
+  if ! command -v node >/dev/null 2>&1; then
+    pacman -Sy --noconfirm nodejs npm
+  fi
+
+  if ! command -v pnpm >/dev/null 2>&1; then
+    npm install -g pnpm@9
+  fi
+
+  echo "=== Building Angular webui ==="
+  cd /project/webui
+  pnpm install --frozen-lockfile
+  pnpm run build
+
+  if [ ! -f "/project/defaults/py_modules/webui/index.html" ]; then
+    echo "ERROR: webui build output not found"
+    exit 1
+  fi
+
+  echo "=== Webui build completed ==="
+else
+  echo "=== Webui source not found at /project/webui, skipping ==="
+fi
+
+cd /backend
+
+# --------------------------------------------------
 # Verification
 # --------------------------------------------------
 
 echo "=== Verifying artifacts ==="
-ls -lh ./out/bcrypt
+ls -lh /backend/out/bcrypt
 ls -lh /tmp/bcrypt_pkg/bcrypt
 
 echo "=== Cleaning environment ==="
-rm -rf ./venv
+rm -rf /backend/venv
 rm -rf /tmp
 
 echo "=== Build complete ==="

@@ -228,6 +228,12 @@ decky-file-explorer-*.zip
 .zip_tmp/
 backend/out/
 
+# Angular browser webui
+webui/node_modules/
+webui/.angular/
+defaults/py_modules/webui/*
+!defaults/py_modules/webui/.gitkeep
+
 instructions.txt
 SSL
 ssl

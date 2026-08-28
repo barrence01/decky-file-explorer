@@ -1,0 +1,23 @@
+<app-side-panel
+  [visible]="sidePanelVisible()"
+  (closePanel)="closeSidePanel()"
+  (driveSelected)="onDriveSelected($event)"
+/>
+
+<div
+  id="mainContent"
+  [class.shifted]="mainContentShifted()"
+  [class.loading]="false"
+>
+  <app-feedback-bars />
+
+  <header>
+    <i class="fas fa-bars hamburger" (click)="toggleSidePanel()"></i>
+    <div class="breadcrumb" id="breadcrumb">{{ navigationState.breadcrumb() }}</div>
+    <h1 class="header-title" style="margin-left: auto">Steam Deck File Explorer</h1>
+  </header>
+
+  <router-outlet />
+</div>
+
+<app-loading-overlay />

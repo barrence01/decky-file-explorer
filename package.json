@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "rollup -c",
+    "build:webui": "pnpm --dir webui build",
+    "build:all": "pnpm build && pnpm build:webui",
     "watch": "rollup -c -w",
     "test": "bash scripts/run-tests.sh"
   },
