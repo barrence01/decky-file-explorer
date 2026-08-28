@@ -1,10 +1,13 @@
 import {
   Component,
+  ElementRef,
   EventEmitter,
   Input,
   OnChanges,
   Output,
   SimpleChanges,
+  ViewChild,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -25,13 +28,27 @@ import { ApiError } from '../../../core/models/api-error.model';
       } @else if (error()) {
         <div class="text-viewer__status text-viewer__status--error">{{ error() }}</div>
       } @else {
-        <textarea
-          class="text-viewer__editor"
-          [readonly]="!canEdit()"
-          [ngModel]="content()"
-          (ngModelChange)="onContentChange($event)"
-          spellcheck="false"
-        ></textarea>
+        <div class="text-viewer__editor-shell">
+          <div
+            class="text-viewer__gutter"
+            #gutter
+            [style.minWidth]="gutterWidth()"
+            aria-hidden="true"
+          >
+            @for (line of lineNumbers(); track line) {
+              <div class="text-viewer__line-number">{{ line }}</div>
+            }
+          </div>
+          <textarea
+            #editor
+            class="text-viewer__editor"
+            [readonly]="!canEdit()"
+            [ngModel]="content()"
+            (ngModelChange)="onContentChange($event)"
+            (scroll)="onEditorScroll()"
+            spellcheck="false"
+          ></textarea>
+        </div>
         <div class="text-viewer__meta">
           <span>{{ byteSize() }} / {{ maxBytes() }} bytes</span>
           @if (!canEdit()) {
@@ -62,10 +79,37 @@ import { ApiError } from '../../../core/models/api-error.model';
       background: #111827;
     }
 
+    .text-viewer__editor-shell {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      overflow: hidden;
+      background: #111827;
+    }
+
+    .text-viewer__gutter {
+      flex-shrink: 0;
+      overflow: hidden;
+      padding: 16px 12px 16px 16px;
+      background: #0f172a;
+      color: #6b7280;
+      text-align: right;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 16px;
+      line-height: 1.5;
+      user-select: none;
+      border-right: 1px solid #1f2937;
+    }
+
+    .text-viewer__line-number {
+      white-space: nowrap;
+    }
+
     .text-viewer__editor {
       flex: 1 1 auto;
       min-height: 0;
-      height: 0;
+      min-width: 0;
+      height: 100%;
       width: 100%;
       box-sizing: border-box;
       border: none;
@@ -117,6 +161,9 @@ export class TextViewerComponent implements OnChanges {
   @Output() saved = new EventEmitter<void>();
   @Output() dirtyChange = new EventEmitter<boolean>();
 
+  @ViewChild('editor') editorRef?: ElementRef<HTMLTextAreaElement>;
+  @ViewChild('gutter') gutterRef?: ElementRef<HTMLDivElement>;
+
   private readonly fileSystemService = inject(FileSystemService);
 
   readonly content = signal('');
@@ -127,6 +174,14 @@ export class TextViewerComponent implements OnChanges {
   readonly byteSize = signal(0);
   readonly maxBytes = signal(TEXT_FILE_MAX_BYTES);
   readonly saving = signal(false);
+  readonly lineNumbers = computed(() => {
+    const lineCount = Math.max(1, this.content().split('\n').length);
+    return Array.from({ length: lineCount }, (_, index) => index + 1);
+  });
+  readonly gutterWidth = computed(() => {
+    const digits = String(this.lineNumbers().length).length;
+    return `${Math.max(2, digits) + 1}ch`;
+  });
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['file'] && this.file) {
@@ -142,6 +197,15 @@ export class TextViewerComponent implements OnChanges {
     this.content.set(value);
     this.byteSize.set(new TextEncoder().encode(value).length);
     this.dirtyChange.emit(this.isDirty);
+  }
+
+  onEditorScroll(): void {
+    const editor = this.editorRef?.nativeElement;
+    const gutter = this.gutterRef?.nativeElement;
+    if (!editor || !gutter) {
+      return;
+    }
+    gutter.scrollTop = editor.scrollTop;
   }
 
   async save(): Promise<boolean> {
