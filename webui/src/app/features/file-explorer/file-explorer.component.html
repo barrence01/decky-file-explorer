@@ -55,6 +55,7 @@
   [file]="previewFile()"
   (close)="closePreview()"
   (download)="downloadPreview()"
+  (saved)="onPreviewSaved()"
 />
 
 <app-upload-modal [visible]="uploadVisible()" [progress]="uploadProgress()" />

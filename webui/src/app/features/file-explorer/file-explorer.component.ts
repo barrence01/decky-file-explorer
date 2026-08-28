@@ -16,6 +16,7 @@ import {
   shouldHighlightFolder,
   truncateString,
 } from '../../core/utils/file-utils';
+import { TEXT_FILE_MAX_BYTES } from '../../core/constants/file-limits';
 import { PropertiesModalComponent } from '../../shared/components/properties-modal/properties-modal.component';
 import { PreviewModalComponent } from '../../shared/components/preview-modal/preview-modal.component';
 import { UploadModalComponent } from '../../shared/components/upload-modal/upload-modal.component';
@@ -232,6 +233,11 @@ export class FileExplorerComponent implements OnInit {
 
     if (file.type === 'image' || file.type === 'video') {
       this.openPreview(file);
+      return;
+    }
+
+    if (this.canOpenTextFile(file)) {
+      this.openPreview(file);
     }
   }
 
@@ -249,6 +255,8 @@ export class FileExplorerComponent implements OnInit {
         void this.loadDirectory(file.path);
       } else if (file.type === 'image' || file.type === 'video') {
         this.openPreview(file);
+      } else if (this.canOpenTextFile(file)) {
+        this.openPreview(file);
       }
       return;
     }
@@ -259,6 +267,27 @@ export class FileExplorerComponent implements OnInit {
   openPreview(file: FileSystemObject): void {
     this.previewFile.set(file);
     this.previewVisible.set(true);
+  }
+
+  private canOpenTextFile(file: FileSystemObject): boolean {
+    if (file.isProtected) {
+      this.feedbackService.showError('Access denied');
+      return false;
+    }
+
+    if ((file.size ?? 0) > TEXT_FILE_MAX_BYTES) {
+      this.feedbackService.showError('File is too large to edit in the browser');
+      return false;
+    }
+
+    return file.type === 'text';
+  }
+
+  async onPreviewSaved(): Promise<void> {
+    const currentPath = this.state.currentPath();
+    if (currentPath) {
+      await this.loadDirectory(currentPath);
+    }
   }
 
   closePreview(): void {
@@ -428,12 +457,8 @@ export class FileExplorerComponent implements OnInit {
       this.uploadProgress.set(0);
 
       for (const file of Array.from(input.files)) {
-        try {
-          await this.uploadService.uploadFile(currentPath, file, (percent) => {
-            this.uploadProgress.set(percent);
-          });
-        } catch (error) {
-          this.feedbackService.showError(`Upload failed for "${file.name}": ${error}`);
+        const uploaded = await this.uploadFileWithConflictHandling(currentPath, file);
+        if (!uploaded) {
           break;
         }
       }
@@ -443,6 +468,66 @@ export class FileExplorerComponent implements OnInit {
     };
 
     input.click();
+  }
+
+  private async uploadFileWithConflictHandling(
+    currentPath: string,
+    file: File
+  ): Promise<boolean> {
+    try {
+      await this.uploadService.uploadFile(currentPath, file, {
+        onProgress: (percent) => this.uploadProgress.set(percent),
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        const payload = error.payload as PasteConflictResponse | undefined;
+        const suggestedName = payload?.suggestedName;
+        const choice = await this.dialogService.choose({
+          title: 'File already exists',
+          message: `"${file.name}" already exists in this folder. What would you like to do?`,
+          conflictFiles: payload?.files ?? [file.name],
+          suggestedName,
+        });
+
+        if (choice === 'replace') {
+          try {
+            await this.uploadService.uploadFile(currentPath, file, {
+              onProgress: (percent) => this.uploadProgress.set(percent),
+              overwrite: true,
+            });
+            return true;
+          } catch (retryError) {
+            this.feedbackService.showError(
+              `Upload failed for "${file.name}": ${this.extractError(retryError, 'Upload failed')}`
+            );
+            return false;
+          }
+        }
+
+        if (choice === 'rename' && suggestedName) {
+          try {
+            await this.uploadService.uploadFile(currentPath, file, {
+              onProgress: (percent) => this.uploadProgress.set(percent),
+              filename: suggestedName,
+            });
+            return true;
+          } catch (retryError) {
+            this.feedbackService.showError(
+              `Upload failed for "${file.name}": ${this.extractError(retryError, 'Upload failed')}`
+            );
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+      this.feedbackService.showError(
+        `Upload failed for "${file.name}": ${this.extractError(error, 'Upload failed')}`
+      );
+      return false;
+    }
   }
 
   async downloadSelected(): Promise<void> {

@@ -41,7 +41,8 @@ import { truncateString } from '../../../core/utils/file-utils';
   styles: `
     .drive-selector {
       position: relative;
-      margin-left: 12px;
+      flex-shrink: 0;
+      z-index: 1;
     }
 
     .drive-selector__trigger {
@@ -74,7 +75,7 @@ import { truncateString } from '../../../core/utils/file-utils';
       border: 1px solid #d1d5db;
       border-radius: 8px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-      z-index: 300;
+      z-index: 200;
     }
 
     .drive-selector__item {

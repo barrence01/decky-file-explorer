@@ -360,6 +360,138 @@ async def test_upload_missing_file(client, fs):
     assert res.status == 415
 
 
+@pytest.mark.asyncio
+async def test_upload_conflict_returns_suggested_name(client, fs):
+    await login(client)
+
+    fs.create_dir("uploads")
+    fs.create_file("uploads/file.txt", b"existing")
+
+    data = FormData()
+    data.add_field("path", "uploads")
+    data.add_field(
+        "file",
+        b"new content",
+        filename="file.txt",
+        content_type="text/plain",
+    )
+
+    res = await client.post("/api/dir/upload", data=data)
+    payload = await res.json()
+
+    assert res.status == 409
+    assert payload["error"] == "conflict"
+    assert payload["files"] == ["file.txt"]
+    assert payload["suggestedName"] == "file (1).txt"
+
+
+@pytest.mark.asyncio
+async def test_upload_overwrite_existing_file(client, fs):
+    await login(client)
+
+    fs.create_dir("uploads")
+    fs.create_file("uploads/file.txt", b"existing")
+
+    data = FormData()
+    data.add_field("path", "uploads")
+    data.add_field("overwrite", "true")
+    data.add_field(
+        "file",
+        b"replaced",
+        filename="file.txt",
+        content_type="text/plain",
+    )
+
+    res = await client.post("/api/dir/upload", data=data)
+
+    assert res.status == 200
+    assert (fs.base_dir / "uploads/file.txt").read_bytes() == b"replaced"
+
+
+@pytest.mark.asyncio
+async def test_upload_with_alternate_filename(client, fs):
+    await login(client)
+
+    fs.create_dir("uploads")
+    fs.create_file("uploads/file.txt", b"existing")
+
+    data = FormData()
+    data.add_field("path", "uploads")
+    data.add_field("filename", "file (1).txt")
+    data.add_field(
+        "file",
+        b"copy",
+        filename="file.txt",
+        content_type="text/plain",
+    )
+
+    res = await client.post("/api/dir/upload", data=data)
+
+    assert res.status == 200
+    assert (fs.base_dir / "uploads/file.txt").read_bytes() == b"existing"
+    assert (fs.base_dir / "uploads/file (1).txt").read_bytes() == b"copy"
+
+
+# ------------------------
+# TEXT FILE
+# ------------------------
+
+@pytest.mark.asyncio
+async def test_read_text_file(client, fs):
+    await login(client)
+
+    fs.create_file("notes.txt", b"hello world")
+
+    res = await client.get("/api/file/text?path=notes.txt")
+    payload = await res.json()
+
+    assert res.status == 200
+    assert payload["content"] == "hello world"
+    assert payload["size"] == 11
+    assert payload["isWritable"] is True
+
+
+@pytest.mark.asyncio
+async def test_read_text_file_too_large(client, fs):
+    await login(client)
+
+    fs.create_file("big.txt", b"x" * 600_000)
+
+    res = await client.get("/api/file/text?path=big.txt")
+
+    assert res.status == 413
+
+
+@pytest.mark.asyncio
+async def test_write_text_file(client, fs):
+    await login(client)
+
+    fs.create_file("notes.txt", b"old")
+
+    res = await client.put(
+        "/api/file/text",
+        json={"path": "notes.txt", "content": "updated"},
+    )
+
+    assert res.status == 200
+    assert (fs.base_dir / "notes.txt").read_text(encoding="utf-8") == "updated"
+
+
+@pytest.mark.asyncio
+async def test_write_text_file_forbidden(client, fs, monkeypatch):
+    await login(client)
+
+    fs.create_file("notes.txt", b"old")
+    monkeypatch.setattr("filesystem.os.access", lambda path, mode: False)
+
+    res = await client.put(
+        "/api/file/text",
+        json={"path": "notes.txt", "content": "updated"},
+    )
+
+    assert res.status == 403
+
+
 # ------------------------
 # DOWNLOAD
 # ------------------------

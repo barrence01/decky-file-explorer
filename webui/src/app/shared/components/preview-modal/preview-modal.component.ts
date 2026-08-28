@@ -14,6 +14,7 @@ import { FileSystemObject } from '../../../core/models/file-system.model';
       [clipThumbnailUrl]="clipThumbnailUrl"
       (close)="close.emit()"
       (download)="download.emit()"
+      (saved)="saved.emit()"
     />
   `,
 })
@@ -24,4 +25,5 @@ export class PreviewModalComponent {
   @Input() clipThumbnailUrl: string | null = null;
   @Output() close = new EventEmitter<void>();
   @Output() download = new EventEmitter<void>();
+  @Output() saved = new EventEmitter<void>();
 }

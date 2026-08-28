@@ -8,6 +8,18 @@ export interface ConfirmOptions {
   conflictFiles?: string[];
 }
 
+export type ChoiceResult = 'replace' | 'rename' | 'cancel';
+
+export interface ChoiceOptions {
+  title: string;
+  message: string;
+  conflictFiles?: string[];
+  suggestedName?: string;
+  replaceLabel?: string;
+  renameLabel?: string;
+  cancelLabel?: string;
+}
+
 export interface PromptOptions {
   title: string;
   label?: string;
@@ -20,6 +32,10 @@ interface ActiveConfirm extends ConfirmOptions {
   resolve: (value: boolean) => void;
 }
 
+interface ActiveChoice extends ChoiceOptions {
+  resolve: (value: ChoiceResult) => void;
+}
+
 interface ActivePrompt extends PromptOptions {
   resolve: (value: string | null) => void;
 }
@@ -27,11 +43,18 @@ interface ActivePrompt extends PromptOptions {
 @Injectable({ providedIn: 'root' })
 export class DialogService {
   readonly activeConfirm = signal<ActiveConfirm | null>(null);
+  readonly activeChoice = signal<ActiveChoice | null>(null);
   readonly activePrompt = signal<ActivePrompt | null>(null);
 
   confirm(options: ConfirmOptions): Promise<boolean> {
     return new Promise((resolve) => {
       this.activeConfirm.set({ ...options, resolve });
+    });
+  }
+
+  choose(options: ChoiceOptions): Promise<ChoiceResult> {
+    return new Promise((resolve) => {
+      this.activeChoice.set({ ...options, resolve });
     });
   }
 
@@ -48,6 +71,15 @@ export class DialogService {
     }
     this.activeConfirm.set(null);
     active.resolve(confirmed);
+  }
+
+  resolveChoice(result: ChoiceResult): void {
+    const active = this.activeChoice();
+    if (!active) {
+      return;
+    }
+    this.activeChoice.set(null);
+    active.resolve(result);
   }
 
   resolvePrompt(value: string | null): void {

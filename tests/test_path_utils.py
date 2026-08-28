@@ -7,6 +7,7 @@ from path_utils import (
     build_breadcrumbs,
     build_error_context,
     can_navigate_up,
+    generate_unique_filename,
     get_parent_path,
     join_api_path,
     normalize_api_path,
@@ -95,3 +96,24 @@ def test_normalize_api_path_windows_drive():
 
 def test_join_api_path_normalizes_slashes():
     assert join_api_path("C:/Users/deck", "Videos") == "C:/Users/deck/Videos"
+
+
+def test_generate_unique_filename(tmp_path: Path):
+    existing = tmp_path / "notes.txt"
+    existing.write_text("original")
+
+    def exists(relative_path: str) -> bool:
+        return (tmp_path / relative_path).exists()
+
+    assert generate_unique_filename(".", "notes.txt", exists) == "notes (1).txt"
+    assert generate_unique_filename(".", "notes (1).txt", exists) == "notes (1).txt"
+
+
+def test_generate_unique_filename_skips_existing_suffixes(tmp_path: Path):
+    (tmp_path / "notes.txt").write_text("a")
+    (tmp_path / "notes (1).txt").write_text("b")
+
+    def exists(relative_path: str) -> bool:
+        return (tmp_path / relative_path).exists()
+
+    assert generate_unique_filename(".", "notes.txt", exists) == "notes (2).txt"

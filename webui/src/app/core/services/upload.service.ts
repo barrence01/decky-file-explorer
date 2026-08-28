@@ -1,18 +1,31 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpEventType } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpEventType } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { ApiError, ApiErrorResponse } from '../models/api-error.model';
+import { UploadConflictResponse } from '../models/file-system.model';
+
+export interface UploadFileOptions {
+  onProgress?: (percent: number) => void;
+  overwrite?: boolean;
+  filename?: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class UploadService {
   constructor(private readonly http: HttpClient) {}
 
-  uploadFile(
-    path: string,
-    file: File,
-    onProgress?: (percent: number) => void
-  ): Promise<void> {
+  uploadFile(path: string, file: File, options: UploadFileOptions = {}): Promise<void> {
     const formData = new FormData();
     formData.append('path', path);
+
+    if (options.overwrite) {
+      formData.append('overwrite', 'true');
+    }
+
+    if (options.filename) {
+      formData.append('filename', options.filename);
+    }
+
     formData.append('file', file);
 
     return new Promise((resolve, reject) => {
@@ -26,20 +39,20 @@ export class UploadService {
           next: (event) => {
             if (event.type === HttpEventType.UploadProgress && event.total) {
               const percent = Math.round((event.loaded / event.total) * 100);
-              onProgress?.(percent);
+              options.onProgress?.(percent);
             }
 
             if (event.type === HttpEventType.Response) {
               if (event.status && event.status >= 200 && event.status < 300) {
-                onProgress?.(100);
+                options.onProgress?.(100);
                 resolve();
               } else {
-                reject(this.extractUploadError(event.body));
+                reject(this.toUploadError(event.status ?? 0, event.body));
               }
             }
           },
-          error: (error) => {
-            reject(this.extractUploadError(error.error) ?? 'Upload failed');
+          error: (error: HttpErrorResponse) => {
+            reject(this.toUploadError(error.status, error.error));
           },
         });
     });
@@ -63,6 +76,22 @@ export class UploadService {
     anchor.click();
     anchor.remove();
     window.URL.revokeObjectURL(url);
+  }
+
+  private toUploadError(status: number, payload: unknown): ApiError | Error {
+    if (status === 409 && this.isConflictPayload(payload)) {
+      return new ApiError('conflict', 409, payload);
+    }
+
+    return new ApiError(this.extractUploadError(payload), status);
+  }
+
+  private isConflictPayload(payload: unknown): payload is UploadConflictResponse {
+    return (
+      typeof payload === 'object' &&
+      payload !== null &&
+      (payload as UploadConflictResponse).error === 'conflict'
+    );
   }
 
   private extractUploadError(payload: unknown): string {

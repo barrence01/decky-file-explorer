@@ -45,3 +45,38 @@ def test_open_write_stream_existing_file_raises(fs):
 
     with pytest.raises(FileAlreadyExistsError):
         fs.open_write_stream("x.bin")
+
+
+def test_open_write_stream_overwrite(fs):
+    fs.create_file("x.bin", b"old")
+
+    stream = fs.open_write_stream("x.bin", overwrite=True)
+    stream.write(b"new")
+    stream.close()
+
+    assert (fs.base_dir / "x.bin").read_bytes() == b"new"
+
+
+def test_read_text_file(fs):
+    fs.create_file("notes.txt", b"hello")
+
+    result = fs.read_text("notes.txt")
+
+    assert result["content"] == "hello"
+    assert result["size"] == 5
+    assert result["isWritable"] is True
+
+
+def test_read_text_file_too_large(fs):
+    fs.create_file("big.txt", b"x" * 600_000)
+
+    with pytest.raises(ValueError, match="too large"):
+        fs.read_text("big.txt", max_bytes=524_288)
+
+
+def test_write_text_file(fs):
+    fs.create_file("notes.txt", b"old")
+
+    fs.write_text("notes.txt", "updated")
+
+    assert (fs.base_dir / "notes.txt").read_text(encoding="utf-8") == "updated"

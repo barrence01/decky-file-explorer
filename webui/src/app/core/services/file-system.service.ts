@@ -5,6 +5,7 @@ import {
   ClipboardMode,
   DirectoryListResponse,
   FileSystemObject,
+  TextFileContentResponse,
 } from '../models/file-system.model';
 import { ApiError, ApiErrorResponse } from '../models/api-error.model';
 
@@ -85,6 +86,29 @@ export class FileSystemService {
 
   getFileViewUrl(path: string): string {
     return `/api/file/view?path=${encodeURIComponent(path)}`;
+  }
+
+  readTextFile(path: string): Promise<TextFileContentResponse> {
+    return firstValueFrom(
+      this.http.get<TextFileContentResponse>(
+        `/api/file/text?path=${encodeURIComponent(path)}`,
+        { withCredentials: true }
+      )
+    ).catch((error) => {
+      throw this.toApiError(error);
+    });
+  }
+
+  saveTextFile(path: string, content: string): Promise<{ status: string }> {
+    return firstValueFrom(
+      this.http.put<{ status: string }>(
+        '/api/file/text',
+        { path, content },
+        { withCredentials: true }
+      )
+    ).catch((error) => {
+      throw this.toApiError(error);
+    });
   }
 
   toApiError(error: unknown): ApiError {

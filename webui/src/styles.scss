@@ -16,19 +16,46 @@ body {
 
 /* ---------- Header ---------- */
 header {
+  position: relative;
+  z-index: 110;
   height: 10%;
   max-height: 30%;
   background: #1f2937;
   color: #fff;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
+  gap: 12px;
   padding: 12px 16px;
-  min-height: 56px; 
+  min-height: 56px;
+  overflow: visible;
 }
 
-@media (max-width: 600px) {
+.header-start {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.header-end {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  overflow: visible;
+}
+
+@media (max-width: 768px) {
   .header-title {
+    display: none;
+  }
+}
+
+@media (max-width: 1024px) {
+  header.header--with-drive .header-title {
     display: none;
   }
 }
@@ -182,7 +209,13 @@ header {
 }
 
 header .header-title {
-  margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: clamp(120px, 20vw, 280px);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
 }
 
 .toolbar {
@@ -295,6 +328,11 @@ header .header-title {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+
+.dialog-actions--stacked {
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .dialog-btn {

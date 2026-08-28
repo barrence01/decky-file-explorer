@@ -14,10 +14,17 @@ from filesystem import (
     FileSystemService,
     FileAlreadyExistsError,
     PathAccessError,
+    TEXT_FILE_MAX_BYTES,
     get_all_drives,
     get_drive_root,
 )
-from path_utils import build_error_context, join_api_path, normalize_api_path
+from path_utils import (
+    build_error_context,
+    generate_unique_filename,
+    join_api_path,
+    normalize_api_path,
+    validate_path_segment,
+)
 import decky
 import gamerecording
 import subprocess
@@ -332,6 +339,8 @@ class WebServer:
         self.app.router.add_post("/api/dir/paste", self.paste_move)
         self.app.router.add_post("/api/dir/create", self.create_dir)
         self.app.router.add_get("/api/file/view", self.view_file)
+        self.app.router.add_get("/api/file/text", self.read_text_file)
+        self.app.router.add_put("/api/file/text", self.write_text_file)
         self.app.router.add_get("/api/steam/clips", self.list_steam_clips)
         self.app.router.add_post("/api/steam/clips/assemble", self.assemble_steam_clip)
         self.app.router.add_get("/api/steam/clips/thumbnail/{clipId}", self.get_steam_clip_thumbnail)
@@ -569,6 +578,8 @@ class WebServer:
         reader: Union[MultipartReader, BodyPartReader] = await request.multipart()
 
         target_dir = None
+        overwrite = False
+        custom_filename = None
 
         if not isinstance(reader, MultipartReader):
             decky.logger.exception(f"File upload - Invalid multipart data")
@@ -579,52 +590,107 @@ class WebServer:
 
             if part.name == "path":
                 target_dir = (await part.read()).decode().strip()
+            elif part.name == "overwrite":
+                value = (await part.read()).decode().strip().lower()
+                overwrite = value in ("true", "1", "yes")
+            elif part.name == "filename":
+                custom_filename = (await part.read()).decode().strip()
             elif part.name == "file":
-                filename = part.filename
+                return await self._handle_upload_file_part(
+                    target_dir,
+                    overwrite,
+                    custom_filename,
+                    part,
+                )
 
-                decky.logger.info(f"File upload - filename: {filename}")
-                if not target_dir:
-                    decky.logger.exception(f"File upload - Missing upload path")
-                    raise web.HTTPBadRequest(reason="Missing upload path")
+        if not target_dir:
+            decky.logger.exception(f"File upload - Missing upload path")
+            raise web.HTTPBadRequest(reason="Missing upload path")
 
-                if not filename:
-                    decky.logger.exception(f"File upload - Missing file")
-                    raise web.HTTPBadRequest(reason="Missing file")
+        decky.logger.exception(f"File upload - Missing file")
+        raise web.HTTPBadRequest(reason="Missing file")
 
-                filename = os.path.basename(filename)
-                try:
-                    target_path = join_api_path(target_dir, filename)
-                except ValueError as e:
-                    raise web.HTTPBadRequest(reason=str(e))
-                decky.logger.info(f"File upload - Filename: {filename} | target_path: {target_path}")
-                loop = asyncio.get_running_loop()
+    async def _handle_upload_file_part(
+        self,
+        target_dir: str | None,
+        overwrite: bool,
+        custom_filename: str | None,
+        part: aiohttp.BodyPartReader,
+    ):
+        if not target_dir:
+            decky.logger.exception(f"File upload - Missing upload path")
+            raise web.HTTPBadRequest(reason="Missing upload path")
 
-                try:
-                    stream = self.fs.open_write_stream(target_path)
-                    try:
-                        while True:
-                            chunk = await part.read_chunk(64 * 1024)
-                            if not chunk:
-                                break
+        if not part.filename:
+            decky.logger.exception(f"File upload - Missing file")
+            raise web.HTTPBadRequest(reason="Missing file")
 
-                            # Write in executor to avoid blocking event loop
-                            await loop.run_in_executor(None, stream.write, chunk)
+        original_filename = os.path.basename(part.filename)
+        filename = custom_filename or original_filename
 
-                    finally:
-                        await loop.run_in_executor(None, stream.close)
-                    return web.json_response({
-                        "status": "ok",
-                        "filename": filename
-                    })
-                except FileAlreadyExistsError:
-                    decky.logger.warning("File upload - File already exists")
-                    return web.json_response(
-                        {"error": "File already exists"},
-                        status=400
-                    )
-        return web.json_response({
-            "status": "ok"
-        })
+        try:
+            validate_path_segment(filename)
+            target_path = join_api_path(target_dir, filename)
+        except ValueError as e:
+            raise web.HTTPBadRequest(reason=str(e))
+
+        decky.logger.info(
+            f"File upload - Filename: {filename} | target_path: {target_path} | overwrite: {overwrite}"
+        )
+
+        def file_exists(relative_path: str) -> bool:
+            try:
+                return self.fs.get_object(relative_path).isFile()
+            except FileNotFoundError:
+                return False
+
+        if file_exists(target_path) and not overwrite:
+            await self._drain_upload_part(part)
+            suggested_name = generate_unique_filename(target_dir, filename, file_exists)
+            decky.logger.warning("File upload - File already exists")
+            return web.json_response(
+                {
+                    "error": "conflict",
+                    "files": [filename],
+                    "suggestedName": suggested_name,
+                },
+                status=409,
+            )
+
+        loop = asyncio.get_running_loop()
+
+        try:
+            stream = self.fs.open_write_stream(target_path, overwrite=overwrite)
+            try:
+                while True:
+                    chunk = await part.read_chunk(64 * 1024)
+                    if not chunk:
+                        break
+
+                    await loop.run_in_executor(None, stream.write, chunk)
+
+            finally:
+                await loop.run_in_executor(None, stream.close)
+            return web.json_response({
+                "status": "ok",
+                "filename": filename,
+            })
+        except FileAlreadyExistsError:
+            await self._drain_upload_part(part)
+            suggested_name = generate_unique_filename(target_dir, filename, file_exists)
+            decky.logger.warning("File upload - File already exists")
+            return web.json_response(
+                {
+                    "error": "conflict",
+                    "files": [filename],
+                    "suggestedName": suggested_name,
+                },
+                status=409,
+            )
+
+    async def _drain_upload_part(self, part: aiohttp.BodyPartReader) -> None:
+        while await part.read_chunk(64 * 1024):
+            pass
 
     @log_exceptions
     async def download(self, request: web.Request):
@@ -748,6 +814,56 @@ class WebServer:
             decky.logger.info("Client disconnected during fallback streaming")
 
         return response
+
+    @log_exceptions
+    async def read_text_file(self, request: web.Request):
+        path = request.query.get("path")
+        if not path:
+            raise web.HTTPBadRequest(reason="Missing path")
+
+        try:
+            result = self.fs.read_text(path, max_bytes=TEXT_FILE_MAX_BYTES)
+            return web.json_response(result)
+        except FileNotFoundError:
+            raise web.HTTPNotFound(reason="File not found")
+        except ValueError as e:
+            message = str(e)
+            if "too large" in message.lower():
+                return web.json_response(
+                    {"error": "File is too large"},
+                    status=413,
+                )
+            return web.json_response(
+                {"error": "File is not valid UTF-8 text"},
+                status=415,
+            )
+
+    @log_exceptions
+    async def write_text_file(self, request: web.Request):
+        data = await request.json()
+        path = data.get("path")
+        content = data.get("content")
+
+        if not path:
+            raise web.HTTPBadRequest(reason="Missing path")
+        if content is None:
+            raise web.HTTPBadRequest(reason="Missing content")
+
+        try:
+            self.fs.write_text(path, content, max_bytes=TEXT_FILE_MAX_BYTES)
+            return web.json_response({"status": "ok"})
+        except FileNotFoundError:
+            raise web.HTTPNotFound(reason="File not found")
+        except PermissionError:
+            raise web.HTTPForbidden(reason="File is not writable")
+        except ValueError as e:
+            message = str(e)
+            if "too large" in message.lower():
+                return web.json_response(
+                    {"error": "Content is too large"},
+                    status=413,
+                )
+            raise web.HTTPBadRequest(reason=message)
     
     # =========================
     # PROTECTED ENDPOINTS - Game Recording

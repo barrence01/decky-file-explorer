@@ -35,6 +35,15 @@ def test_to_dict_file(fs):
     assert data["extension"] == ".txt"
     assert data["size"] == 3
     assert data["type"] == "text"
+    assert data["isWritable"] is True
+
+
+def test_is_writable_file(fs, monkeypatch):
+    fs.create_file("a.txt", b"123")
+    obj = fs.get_object("a.txt")
+
+    monkeypatch.setattr("filesystem.os.access", lambda path, mode: False)
+    assert obj.isWritable() is False
 
 
 def test_to_dict_directory(fs):

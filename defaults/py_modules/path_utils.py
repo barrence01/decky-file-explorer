@@ -21,6 +21,26 @@ def join_api_path(parent: str, name: str) -> str:
     return normalize_api_path(Path(parent) / name)
 
 
+def generate_unique_filename(parent: str, filename: str, exists: callable) -> str:
+    """
+    Returns a unique filename within parent by appending (1), (2), etc.
+    exists(relative_path: str) -> bool checks whether the candidate already exists.
+    """
+    validate_path_segment(filename)
+    path = Path(filename)
+    stem = path.stem
+    suffix = path.suffix
+    candidate = filename
+    counter = 1
+
+    while exists(join_api_path(parent, candidate)):
+        candidate = f"{stem} ({counter}){suffix}"
+        counter += 1
+        validate_path_segment(candidate)
+
+    return candidate
+
+
 def is_path_accessible(path: Path, base_dir: Path) -> bool:
     p = path.resolve()
 

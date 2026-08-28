@@ -11,6 +11,7 @@ export interface FileSystemObject {
   isFile: boolean;
   isHidden: boolean;
   isProtected?: boolean;
+  isWritable?: boolean;
   directory: string;
   name?: string;
   extension?: string;
@@ -29,6 +30,16 @@ export interface DirectoryListResponse {
 export interface PasteConflictResponse {
   error: string;
   files: string[];
+  suggestedName?: string;
+}
+
+export type UploadConflictResponse = PasteConflictResponse;
+
+export interface TextFileContentResponse {
+  content: string;
+  size: number;
+  maxBytes: number;
+  isWritable: boolean;
 }
 
 export type ClipboardMode = 'copy' | 'move';

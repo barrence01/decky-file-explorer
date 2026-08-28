@@ -18,6 +18,7 @@ from path_utils import (
 )
 
 DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
+TEXT_FILE_MAX_BYTES = 524_288
 
 
 # =========================
@@ -245,6 +246,14 @@ class FileSystemObject:
         except (PermissionError, OSError):
             return True
 
+    def isWritable(self) -> bool:
+        try:
+            if self.isDir():
+                return os.access(self.path, os.W_OK)
+            return os.access(self.path, os.W_OK) and os.access(self.path.parent, os.W_OK)
+        except OSError:
+            return False
+
     # ---- Directory / file info ----
     def getDirectoryPath(self) -> str:
         directory = self.path if self.isDir() else self.path.parent
@@ -290,6 +299,7 @@ class FileSystemObject:
             "isFile": self.isFile(),
             "isHidden": self.isHidden(),
             "isProtected": self.isProtected(),
+            "isWritable": self.isWritable(),
             "directory": self.getDirectoryPath(),
         }
 
@@ -502,16 +512,62 @@ class FileSystemService:
                     break
                 yield chunk
 
-    def open_write_stream(self, path: str) -> FileWriteStream:
+    def open_write_stream(self, path: str, overwrite: bool = False) -> FileWriteStream:
         """
         Opens a file for streamed writing.
         Returns a writable file object.
         """
         file_path = self._resolve(path)
         if Path(file_path).is_file():
-            raise FileAlreadyExistsError("File already exists")
+            if not overwrite:
+                raise FileAlreadyExistsError("File already exists")
+            file_path.unlink()
         file_path.parent.mkdir(parents=True, exist_ok=True)
         return FileWriteStream(open(file_path, "wb"))
+
+    def read_text(self, path: str, max_bytes: int = TEXT_FILE_MAX_BYTES) -> dict:
+        file_path = self._resolve(path)
+        if not file_path.is_file():
+            raise FileNotFoundError("File not found")
+
+        size = file_path.stat().st_size
+        if size > max_bytes:
+            raise ValueError("File is too large")
+
+        raw = file_path.read_bytes()
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("File is not valid UTF-8 text") from exc
+
+        obj = FileSystemObject(file_path)
+        return {
+            "content": content,
+            "size": size,
+            "maxBytes": max_bytes,
+            "isWritable": obj.isWritable(),
+        }
+
+    def write_text(self, path: str, content: str, max_bytes: int = TEXT_FILE_MAX_BYTES) -> None:
+        encoded = content.encode("utf-8")
+        if len(encoded) > max_bytes:
+            raise ValueError("Content is too large")
+
+        file_path = self._resolve(path)
+        if not file_path.is_file():
+            raise FileNotFoundError("File not found")
+
+        obj = FileSystemObject(file_path)
+        if not obj.isWritable():
+            raise PermissionError("File is not writable")
+
+        temp_path = file_path.with_suffix(file_path.suffix + ".tmp")
+        try:
+            temp_path.write_bytes(encoded)
+            temp_path.replace(file_path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink(missing_ok=True)
 
     def copy_streamed(self, src: str, dst: str, chunk_size=DEFAULT_CHUNK_SIZE):
         src_path = self._resolve(src)

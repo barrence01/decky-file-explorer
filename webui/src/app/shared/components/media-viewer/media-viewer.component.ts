@@ -1,8 +1,17 @@
-import { Component, EventEmitter, HostListener, Input, Output } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  HostListener,
+  Input,
+  Output,
+  ViewChild,
+  signal,
+} from '@angular/core';
 import { FileSystemObject } from '../../../core/models/file-system.model';
 import { FileSystemService } from '../../../core/services/file-system.service';
 import { getFileName } from '../../../core/utils/file-utils';
 import { ImageViewerComponent } from './image-viewer.component';
+import { TextViewerComponent } from './text-viewer.component';
 import { VideoViewerComponent } from './video-viewer.component';
 
 export type PreviewMode = 'file' | 'clip';
@@ -10,7 +19,7 @@ export type PreviewMode = 'file' | 'clip';
 @Component({
   selector: 'app-media-viewer',
   standalone: true,
-  imports: [ImageViewerComponent, VideoViewerComponent],
+  imports: [ImageViewerComponent, VideoViewerComponent, TextViewerComponent],
   template: `
     @if (visible) {
       <div class="modal">
@@ -34,6 +43,14 @@ export type PreviewMode = 'file' | 'clip';
               @if (file.type === 'video') {
                 <app-video-viewer [src]="fileUrl" />
               }
+              @if (file.type === 'text') {
+                <app-text-viewer
+                  #textViewer
+                  [file]="file"
+                  (dirtyChange)="textDirty.set($event)"
+                  (saved)="saved.emit()"
+                />
+              }
             }
             @if (mode === 'clip' && clipThumbnailUrl) {
               <app-image-viewer [src]="clipThumbnailUrl" [alt]="title" />
@@ -41,6 +58,15 @@ export type PreviewMode = 'file' | 'clip';
           </div>
           @if (mode === 'file' && file) {
             <footer class="media-viewer-footer">
+              @if (file.type === 'text' && textViewer?.canEdit()) {
+                <button
+                  type="button"
+                  [disabled]="!textDirty() || (textViewer?.saving() ?? false)"
+                  (click)="saveText()"
+                >
+                  <i class="fas fa-save"></i> Save
+                </button>
+              }
               <button type="button" (click)="download.emit()">
                 <i class="fas fa-download"></i> Download
               </button>
@@ -85,6 +111,7 @@ export type PreviewMode = 'file' | 'clip';
 
     .media-viewer-footer {
       justify-content: center;
+      gap: 12px;
     }
 
     .media-viewer-footer button {
@@ -97,6 +124,11 @@ export type PreviewMode = 'file' | 'clip';
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    .media-viewer-footer button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     .media-viewer-body {
@@ -133,6 +165,11 @@ export class MediaViewerComponent {
   @Input() clipThumbnailUrl: string | null = null;
   @Output() close = new EventEmitter<void>();
   @Output() download = new EventEmitter<void>();
+  @Output() saved = new EventEmitter<void>();
+
+  @ViewChild('textViewer') textViewer?: TextViewerComponent;
+
+  readonly textDirty = signal(false);
 
   constructor(private readonly fileSystemService: FileSystemService) {}
 
@@ -145,6 +182,10 @@ export class MediaViewerComponent {
 
   get fileUrl(): string {
     return this.file ? this.fileSystemService.getFileViewUrl(this.file.path) : '';
+  }
+
+  async saveText(): Promise<void> {
+    await this.textViewer?.save();
   }
 
   @HostListener('document:keydown.escape')
