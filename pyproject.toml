@@ -21,6 +21,14 @@ dependencies = [
     "bcrypt >= 5.0.0"
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest >= 8.0",
+    "pytest-asyncio >= 0.24",
+    "pytest-aiohttp >= 1.0",
+    "pytest-cov >= 5.0",
+]
+
 [build-system]
 requires = ["setuptools>=78.1.1"]
 build-backend = "setuptools.build_meta"
@@ -48,4 +56,14 @@ include = ["decky_file_explorer*"]
     "*.png",
     "*.svg",
     "*.ico",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "defaults/py_modules", "bin"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = ["-ra", "--strict-markers"]
+markers = [
+    "asyncio: mark test as asyncio (pytest-asyncio)",
 ]
