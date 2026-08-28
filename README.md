@@ -31,7 +31,7 @@ There are several ways to install this plugin:
 
 **Requirements:**
 - Node.js
-- Docker
+- Podman or Docker (Podman is preferred when both are installed)
 
 
 # Main menu of the plugin

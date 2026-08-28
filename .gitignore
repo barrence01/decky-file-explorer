@@ -226,3 +226,4 @@ bin
 instructions.txt
 SSL
 ssl
+.zip_tmp/*
