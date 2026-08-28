@@ -5,6 +5,8 @@ import { FeedbackBarsComponent } from './shared/components/feedback-bars/feedbac
 import { LoadingOverlayComponent } from './shared/components/loading-overlay/loading-overlay.component';
 import { SidePanelComponent } from './shared/components/side-panel/side-panel.component';
 import { DialogHostComponent } from './shared/components/dialog-host/dialog-host.component';
+import { DriveSelectorComponent } from './shared/components/drive-selector/drive-selector.component';
+import { DriveSelectorOverlayComponent } from './shared/components/drive-selector/drive-selector-overlay.component';
 import { NavigationStateService } from './core/services/navigation-state.service';
 import { LoadingService } from './core/services/loading.service';
 import { isCompactView } from './core/utils/file-utils';
@@ -18,6 +20,8 @@ import { isCompactView } from './core/utils/file-utils';
     LoadingOverlayComponent,
     SidePanelComponent,
     DialogHostComponent,
+    DriveSelectorComponent,
+    DriveSelectorOverlayComponent,
   ],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
@@ -49,6 +53,10 @@ export class AppComponent implements OnInit {
     return this.sidePanelVisible() && this.isCompactView();
   }
 
+  get showDriveSelector(): boolean {
+    return this.authService.isLoggedIn() && this.router.url.startsWith('/files');
+  }
+
   toggleSidePanel(): void {
     this.sidePanelVisible.update((value) => !value);
   }
@@ -58,7 +66,6 @@ export class AppComponent implements OnInit {
   }
 
   onDriveSelected(path: string): void {
-    this.closeSidePanel();
     void this.router.navigate(['/files']).then(() => {
       this.navigationState.requestDirectory(path);
     });

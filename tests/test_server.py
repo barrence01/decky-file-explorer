@@ -148,7 +148,9 @@ async def test_list_dir_invalid(client):
         json={"path": "missing"},
     )
 
-    assert res.status == 400
+    assert res.status == 404
+    data = await res.json()
+    assert data["code"] == "not_found"
 
 
 # ------------------------
@@ -533,6 +535,47 @@ async def test_assemble_clip_invalid_path(client):
     assert res.status == 400
 
 @pytest.mark.asyncio
+async def test_rename_blocks_path_injection(client, fs):
+    await login(client)
+
+    fs.create_file("file.txt", b"x")
+
+    res = await client.post(
+        "/api/file/rename",
+        json={"path": "file.txt", "newName": "../escape.txt"},
+    )
+
+    assert res.status == 400
+    data = await res.json()
+    assert data["code"] == "invalid_name"
+    assert (fs.base_dir / "file.txt").exists()
+    assert not (fs.base_dir / "escape.txt").exists()
+
+
+@pytest.mark.asyncio
+async def test_list_dir_access_denied_payload(client, fs, monkeypatch):
+    await login(client)
+
+    fs.create_dir("locked")
+
+    def raise_permission(_self):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr("pathlib.Path.iterdir", raise_permission)
+
+    res = await client.post(
+        "/api/dir/list",
+        json={"path": "locked"},
+    )
+
+    assert res.status == 403
+    data = await res.json()
+    assert data["code"] == "access_denied"
+    assert data["canNavigateUp"] is True
+    assert data["parentPath"] is not None
+
+
+@pytest.mark.asyncio
 async def test_assemble_clip_conflict(client, monkeypatch, tmp_path):
     await login(client)
 
@@ -552,3 +595,4 @@ async def test_assemble_clip_conflict(client, monkeypatch, tmp_path):
     )
 
     assert res.status == 409
+

@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, inject, signal, HostListener } from '@angular/core';
+import { Component, OnInit, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { FileSystemObject } from '../../core/models/file-system.model';
 import {
@@ -23,12 +23,9 @@ import { LongPressDirective } from '../../shared/directives/long-press.directive
 import { DriveStateService } from '../../core/services/drive-state.service';
 import { NavigationStateService } from '../../core/services/navigation-state.service';
 import { DialogService } from '../../core/services/dialog.service';
-
-interface OverflowMenuItem {
-  label: string;
-  action: () => void;
-  checked?: boolean;
-}
+import { FileExplorerToolbarComponent } from './toolbar/file-explorer-toolbar.component';
+import { FileExplorerMobileToolbarComponent } from './toolbar/file-explorer-mobile-toolbar.component';
+import { OverflowMenuItem, ToolbarActions } from './toolbar/toolbar-actions';
 
 @Component({
   selector: 'app-file-explorer',
@@ -39,6 +36,8 @@ interface OverflowMenuItem {
     PreviewModalComponent,
     UploadModalComponent,
     LongPressDirective,
+    FileExplorerToolbarComponent,
+    FileExplorerMobileToolbarComponent,
   ],
   templateUrl: './file-explorer.component.html',
 })
@@ -57,13 +56,15 @@ export class FileExplorerComponent implements OnInit {
   readonly previewFile = signal<FileSystemObject | null>(null);
   readonly uploadVisible = signal(false);
   readonly uploadProgress = signal(0);
-  readonly overflowMenuOpen = signal(false);
-  readonly overflowMenuItems = signal<OverflowMenuItem[]>([]);
+  readonly showDirectoryError = signal(false);
+  readonly directoryErrorMessage = signal('');
 
   readonly truncateString = truncateString;
   readonly getFileName = getFileName;
   readonly shouldHighlightFolder = shouldHighlightFolder;
   readonly isCompactView = isCompactView;
+
+  private lastRequestedPath: string | null = null;
 
   constructor() {
     effect(() => {
@@ -77,9 +78,6 @@ export class FileExplorerComponent implements OnInit {
 
   ngOnInit(): void {
     void this.loadDirectory();
-    setTimeout(() => {
-      void this.driveState.refresh();
-    }, 1000);
   }
 
   get visibleFiles(): FileSystemObject[] {
@@ -117,28 +115,90 @@ export class FileExplorerComponent implements OnInit {
     return null;
   }
 
+  get toolbarActions(): ToolbarActions {
+    return {
+      canNavigateUp: this.canNavigateUp,
+      hasSelection: this.state.selectedItems().length > 0,
+      selectionCount: this.state.selectedItems().length,
+      clipboardActive: this.state.clipboardItems().length > 0,
+      clipboardCount: this.state.clipboardItems().length,
+      showHidden: this.state.showHidden(),
+      onUp: () => this.navigateUp(),
+      onRefresh: () => this.retryDirectory(),
+      onUpload: () => this.uploadFiles(),
+      onMove: () => this.startMove(),
+      onCopy: () => this.startCopy(),
+      onDownload: () => this.downloadSelected(),
+      onDelete: () => this.deleteSelected(),
+      onRename: () => this.renameSelected(),
+      onNewFolder: () => this.createNewFolder(),
+      onProperties: () => this.showProperties(),
+      onToggleHidden: () => this.toggleShowHidden(),
+      onPaste: () => this.pasteClipboard(),
+      onClearClipboard: () => this.clearClipboard(),
+    };
+  }
+
   async loadDirectory(path: string | null = null): Promise<void> {
+    this.lastRequestedPath = path;
     await this.loadingService.withLoading(async () => {
       this.state.clearSelection();
 
       try {
         const data = await this.fileSystemService.listDirectory(path);
+        this.showDirectoryError.set(false);
+        this.directoryErrorMessage.set('');
         this.state.selectedDir.set(data.selectedDir);
         this.state.currentPath.set(data.selectedDir.path);
         this.state.dirContent.set(data.dirContent);
         this.navigationState.setBreadcrumbs(data.breadcrumbs);
-        await this.driveState.refresh(data.selectedDir.path);
+        await this.driveState.refresh(data.selectedDir.path, data.selectedDrive);
       } catch (error) {
-        this.feedbackService.showError(this.extractError(error, 'Failed to load directory'));
-        setTimeout(() => {
-          void this.loadDirectory(null);
-        }, 2000);
+        this.handleDirectoryError(error);
       }
     });
   }
 
-  onDriveSelected(path: string): void {
-    void this.loadDirectory(path);
+  navigateUp(): void {
+    const parent = this.parentPath;
+    if (parent) {
+      void this.loadDirectory(parent);
+    }
+  }
+
+  retryDirectory(): void {
+    void this.loadDirectory(this.state.currentPath() ?? this.lastRequestedPath);
+  }
+
+  goHome(): void {
+    void this.loadDirectory(null);
+  }
+
+  handleDirectoryError(error: unknown): void {
+    const apiError = this.toApiError(error);
+    this.feedbackService.showError(apiError.message);
+    this.directoryErrorMessage.set(apiError.message);
+    this.showDirectoryError.set(true);
+
+    const currentDir = this.state.selectedDir();
+    if (apiError.parentPath && apiError.canNavigateUp) {
+      this.state.selectedDir.set({
+        ...(currentDir ?? {
+          path: this.state.currentPath() ?? '',
+          isDir: true,
+          isFile: false,
+          isHidden: false,
+          directory: this.state.currentPath() ?? '',
+        }),
+        parentPath: apiError.parentPath,
+        canNavigateUp: true,
+      });
+      return;
+    }
+
+    if (apiError.parentPath && !currentDir) {
+      void this.loadDirectory(apiError.parentPath);
+    }
   }
 
   isSelected(file: FileSystemObject): boolean {
@@ -162,6 +222,10 @@ export class FileExplorerComponent implements OnInit {
 
   onDesktopDoubleClick(file: FileSystemObject): void {
     if (file.isDir) {
+      if (file.isProtected) {
+        this.feedbackService.showError('Access denied');
+        return;
+      }
       void this.loadDirectory(file.path);
       return;
     }
@@ -178,6 +242,10 @@ export class FileExplorerComponent implements OnInit {
   onMobileShortPress(file: FileSystemObject): void {
     if (this.state.selectedItems().length === 0) {
       if (file.isDir) {
+        if (file.isProtected) {
+          this.feedbackService.showError('Access denied');
+          return;
+        }
         void this.loadDirectory(file.path);
       } else if (file.type === 'image' || file.type === 'video') {
         this.openPreview(file);
@@ -398,20 +466,6 @@ export class FileExplorerComponent implements OnInit {
     this.state.showHidden.update((value) => !value);
   }
 
-  openOverflowMenu(items: OverflowMenuItem[]): void {
-    this.overflowMenuItems.set(items);
-    this.overflowMenuOpen.set(true);
-  }
-
-  closeOverflowMenu(): void {
-    this.overflowMenuOpen.set(false);
-  }
-
-  runOverflowAction(item: OverflowMenuItem): void {
-    this.closeOverflowMenu();
-    item.action();
-  }
-
   buildOverflowMenu(): OverflowMenuItem[] {
     const selectionCount = this.state.selectedItems().length;
     const items: OverflowMenuItem[] = [];
@@ -459,14 +513,17 @@ export class FileExplorerComponent implements OnInit {
     return 'fas fa-file';
   }
 
-  private extractError(error: unknown, fallback: string): string {
-    if (typeof error === 'object' && error !== null && 'error' in error) {
-      const payload = (error as { error?: { error?: string } }).error;
-      if (payload?.error) {
-        return payload.error;
-      }
+  private toApiError(error: unknown): ApiError {
+    if (error instanceof ApiError) {
+      return error;
     }
+    return this.fileSystemService.toApiError(error);
+  }
 
+  private extractError(error: unknown, fallback: string): string {
+    if (error instanceof ApiError) {
+      return error.message;
+    }
     return fallback;
   }
 }

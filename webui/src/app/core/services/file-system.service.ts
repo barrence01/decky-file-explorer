@@ -6,7 +6,7 @@ import {
   DirectoryListResponse,
   FileSystemObject,
 } from '../models/file-system.model';
-import { ApiError } from '../models/api-error.model';
+import { ApiError, ApiErrorResponse } from '../models/api-error.model';
 
 @Injectable({ providedIn: 'root' })
 export class FileSystemService {
@@ -19,7 +19,9 @@ export class FileSystemService {
         { path },
         { withCredentials: true }
       )
-    );
+    ).catch((error) => {
+      throw this.toApiError(error);
+    });
   }
 
   deleteItems(paths: string[]): Promise<{ status: string }> {
@@ -29,7 +31,9 @@ export class FileSystemService {
         { paths },
         { withCredentials: true }
       )
-    );
+    ).catch((error) => {
+      throw this.toApiError(error);
+    });
   }
 
   renameItem(path: string, newName: string): Promise<{ status: string }> {
@@ -39,7 +43,9 @@ export class FileSystemService {
         { path, newName },
         { withCredentials: true }
       )
-    );
+    ).catch((error) => {
+      throw this.toApiError(error);
+    });
   }
 
   createDirectory(parentPath: string, name: string): Promise<{ status: string }> {
@@ -49,7 +55,9 @@ export class FileSystemService {
         { parentPath, name },
         { withCredentials: true }
       )
-    );
+    ).catch((error) => {
+      throw this.toApiError(error);
+    });
   }
 
   async pasteItems(
@@ -67,15 +75,34 @@ export class FileSystemService {
         )
       );
     } catch (error) {
-      if (error instanceof HttpErrorResponse && error.status === 409) {
-        throw new ApiError('conflict', 409, error.error);
+      const apiError = this.toApiError(error);
+      if (apiError.status === 409) {
+        throw new ApiError('conflict', 409, apiError.payload);
       }
-      throw error;
+      throw apiError;
     }
   }
 
   getFileViewUrl(path: string): string {
     return `/api/file/view?path=${encodeURIComponent(path)}`;
+  }
+
+  toApiError(error: unknown): ApiError {
+    if (error instanceof ApiError) {
+      return error;
+    }
+
+    if (error instanceof HttpErrorResponse) {
+      const payload = (error.error ?? {}) as ApiErrorResponse;
+      const message = payload.error || error.message || 'Request failed';
+      return new ApiError(message, error.status, payload);
+    }
+
+    if (error instanceof Error) {
+      return new ApiError(error.message, 0);
+    }
+
+    return new ApiError('Request failed', 0);
   }
 }
 

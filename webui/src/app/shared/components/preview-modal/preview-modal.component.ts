@@ -1,57 +1,20 @@
-import { Component, EventEmitter, HostListener, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { MediaViewerComponent, PreviewMode } from '../media-viewer/media-viewer.component';
 import { FileSystemObject } from '../../../core/models/file-system.model';
-import { FileSystemService } from '../../../core/services/file-system.service';
-import { getFileName } from '../../../core/utils/file-utils';
-
-export type PreviewMode = 'file' | 'clip';
 
 @Component({
   selector: 'app-preview-modal',
   standalone: true,
+  imports: [MediaViewerComponent],
   template: `
-    @if (visible) {
-      <div class="modal">
-        <div class="preview-shell">
-          <header class="preview-header">
-            <span>{{ title }}</span>
-            <button
-              class="preview-close-btn"
-              type="button"
-              aria-label="Close preview"
-              (click)="close.emit()"
-            >
-              x
-            </button>
-          </header>
-          <div class="preview-body">
-            @if (mode === 'file' && file) {
-              @if (file.type === 'image') {
-                <img class="preview-media-item" [src]="fileUrl" [alt]="title" />
-              }
-              @if (file.type === 'video') {
-                <video
-                  class="preview-media-item"
-                  [src]="fileUrl"
-                  controls
-                  autoplay
-                  playsinline
-                ></video>
-              }
-            }
-            @if (mode === 'clip' && clipThumbnailUrl) {
-              <img class="preview-media-item" [src]="clipThumbnailUrl" [alt]="title" />
-            }
-          </div>
-          @if (mode === 'file' && file) {
-            <footer class="preview-footer">
-              <button type="button" (click)="download.emit()">
-                <i class="fas fa-download"></i> Download
-              </button>
-            </footer>
-          }
-        </div>
-      </div>
-    }
+    <app-media-viewer
+      [visible]="visible"
+      [mode]="mode"
+      [file]="file"
+      [clipThumbnailUrl]="clipThumbnailUrl"
+      (close)="close.emit()"
+      (download)="download.emit()"
+    />
   `,
 })
 export class PreviewModalComponent {
@@ -61,25 +24,4 @@ export class PreviewModalComponent {
   @Input() clipThumbnailUrl: string | null = null;
   @Output() close = new EventEmitter<void>();
   @Output() download = new EventEmitter<void>();
-
-  constructor(private readonly fileSystemService: FileSystemService) {}
-
-  get title(): string {
-    if (this.mode === 'clip') {
-      return this.file ? `Steam Clip ${getFileName(this.file)}` : 'Steam Clip';
-    }
-
-    return this.file ? getFileName(this.file) : '';
-  }
-
-  get fileUrl(): string {
-    return this.file ? this.fileSystemService.getFileViewUrl(this.file.path) : '';
-  }
-
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
-    if (this.visible) {
-      this.close.emit();
-    }
-  }
 }

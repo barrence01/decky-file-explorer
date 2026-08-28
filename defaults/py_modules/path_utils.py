@@ -6,11 +6,18 @@ def normalize_api_path(path: Path | str) -> str:
     return str(path).replace("\\", "/")
 
 
-def join_api_path(parent: str, name: str) -> str:
+def validate_path_segment(name: str) -> str:
     if not name or name in (".", ".."):
         raise ValueError("Invalid name")
     if "/" in name or "\\" in name:
         raise ValueError("Invalid name")
+    if any(ord(char) < 32 for char in name):
+        raise ValueError("Invalid name")
+    return name
+
+
+def join_api_path(parent: str, name: str) -> str:
+    validate_path_segment(name)
     return normalize_api_path(Path(parent) / name)
 
 
@@ -31,6 +38,14 @@ def is_path_accessible(path: Path, base_dir: Path) -> bool:
     return True
 
 
+def resolve_destination(parent: Path, name: str, base_dir: Path) -> Path:
+    validate_path_segment(name)
+    destination = (parent / name).resolve()
+    if not is_path_accessible(destination, base_dir):
+        raise ValueError("Destination path is not accessible")
+    return destination
+
+
 def get_parent_path(resolved: Path, base_dir: Path) -> str | None:
     current = resolved.resolve()
     base = base_dir.resolve()
@@ -48,6 +63,15 @@ def get_parent_path(resolved: Path, base_dir: Path) -> str | None:
 
 def can_navigate_up(resolved: Path, base_dir: Path) -> bool:
     return get_parent_path(resolved, base_dir) is not None
+
+
+def build_error_context(path: Path | str, base_dir: Path) -> dict:
+    resolved = Path(path).resolve()
+    parent_path = get_parent_path(resolved, base_dir)
+    return {
+        "parentPath": parent_path,
+        "canNavigateUp": parent_path is not None,
+    }
 
 
 def build_breadcrumbs(resolved: Path, base_dir: Path) -> list[dict]:

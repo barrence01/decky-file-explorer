@@ -8,8 +8,16 @@ import mimetypes
 import os
 import socket
 import bcrypt
-from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError, get_all_drives, get_drive_root
-from path_utils import join_api_path, normalize_api_path
+from urllib.parse import quote
+from filesystem import (
+    FileSystemError,
+    FileSystemService,
+    FileAlreadyExistsError,
+    PathAccessError,
+    get_all_drives,
+    get_drive_root,
+)
+from path_utils import build_error_context, join_api_path, normalize_api_path
 import decky
 import gamerecording
 import subprocess
@@ -114,8 +122,9 @@ async def error_middleware(request, handler):
         )
 
     except Exception as ex:
+        decky.logger.exception("Unhandled server error")
         return web.json_response(
-            {"error": str(ex)},
+            {"error": "Internal server error"},
             status=500
         )
 
@@ -189,6 +198,76 @@ def create_ssl_context() -> ssl.SSLContext:
         keyfile=str(SSL_KEY),
     )
     return context
+
+
+def format_content_disposition(filename: str, disposition: str = "attachment") -> str:
+    safe_name = filename.replace('"', "'")
+    encoded_name = quote(filename)
+    return (
+        f'{disposition}; filename="{safe_name}"; '
+        f"filename*=UTF-8''{encoded_name}"
+    )
+
+
+def filesystem_error_response(
+    fs: FileSystemService,
+    exc: Exception,
+    path: str | None = None,
+) -> web.Response:
+    if isinstance(exc, PathAccessError):
+        return web.json_response(
+            {
+                "error": str(exc),
+                "code": exc.code,
+                "parentPath": exc.parent_path,
+                "canNavigateUp": exc.can_navigate_up,
+            },
+            status=403 if exc.code in ("access_denied", "forbidden") else 404,
+        )
+
+    if isinstance(exc, FileSystemError):
+        context = build_error_context(path or fs.base_dir, fs.base_dir)
+        return web.json_response(
+            {
+                "error": str(exc),
+                "code": "forbidden",
+                "parentPath": context["parentPath"],
+                "canNavigateUp": context["canNavigateUp"],
+            },
+            status=403,
+        )
+
+    if isinstance(exc, FileNotFoundError):
+        context = build_error_context(path or fs.base_dir, fs.base_dir)
+        return web.json_response(
+            {
+                "error": str(exc),
+                "code": "not_found",
+                "parentPath": context["parentPath"],
+                "canNavigateUp": context["canNavigateUp"],
+            },
+            status=404,
+        )
+
+    if isinstance(exc, NotADirectoryError):
+        return web.json_response(
+            {
+                "error": str(exc),
+                "code": "not_directory",
+            },
+            status=400,
+        )
+
+    if isinstance(exc, ValueError):
+        return web.json_response(
+            {
+                "error": str(exc),
+                "code": "invalid_name",
+            },
+            status=400,
+        )
+
+    return web.json_response({"error": str(exc)}, status=400)
 
 def get_file_system_service() -> FileSystemService:
     server_settings = get_server_settings()
@@ -370,11 +449,8 @@ class WebServer:
                 "dirContent": [obj.to_dict() for obj in items]
             })
 
-        except (FileSystemError, FileNotFoundError, NotADirectoryError) as e:
-            return web.json_response(
-                {"error": str(e)},
-                status=400
-            )
+        except (PathAccessError, FileSystemError, FileNotFoundError, NotADirectoryError) as e:
+            return filesystem_error_response(self.fs, e, path)
     
     @log_exceptions
     async def delete(self, request: web.Request):
@@ -413,8 +489,8 @@ class WebServer:
         try:
             self.fs.rename(path, new_name)
             return web.json_response({"status": "ok"})
-        except FileSystemError as e:
-            return web.json_response({"error": str(e)}, status=400)
+        except (FileSystemError, ValueError) as e:
+            return filesystem_error_response(self.fs, e, path)
     
     @log_exceptions
     async def paste_move(self, request: web.Request):
@@ -516,7 +592,10 @@ class WebServer:
                     raise web.HTTPBadRequest(reason="Missing file")
 
                 filename = os.path.basename(filename)
-                target_path = os.path.join(target_dir, filename)
+                try:
+                    target_path = join_api_path(target_dir, filename)
+                except ValueError as e:
+                    raise web.HTTPBadRequest(reason=str(e))
                 decky.logger.info(f"File upload - Filename: {filename} | target_path: {target_path}")
                 loop = asyncio.get_running_loop()
 
@@ -564,7 +643,7 @@ class WebServer:
             if obj.isFile():
                 response = web.StreamResponse(
                     headers={
-                        "Content-Disposition": f'attachment; filename="{obj.path.name}"'
+                        "Content-Disposition": format_content_disposition(obj.path.name),
                     }
                 )
                 await response.prepare(request)
@@ -702,7 +781,12 @@ class WebServer:
         if not mpd_path:
             raise web.HTTPBadRequest(reason="Missing mpd path")
 
-        mpd = Path(mpd_path)
+        try:
+            resolved_mpd = self.fs._resolve(mpd_path)
+        except FileSystemError as e:
+            return filesystem_error_response(self.fs, e, mpd_path)
+
+        mpd = resolved_mpd
         if not mpd.exists() or mpd.name != "session.mpd":
             raise web.HTTPBadRequest(reason="Invalid session.mpd path")
         
@@ -748,8 +832,9 @@ class WebServer:
                 )
         except subprocess.CalledProcessError:
             raise web.HTTPInternalServerError(reason="FFmpeg failed assembling clip")
-        except Exception as e:
-            raise web.HTTPInternalServerError(reason=str(e))
+        except Exception:
+            decky.logger.exception("assemble_steam_clip failed")
+            raise web.HTTPInternalServerError(reason="Failed to assemble clip")
 
         decky.logger.info(f"Video assembled and moved to {videos_dir}")
         
@@ -791,7 +876,7 @@ class WebServer:
             currentDrive = get_drive_root(path)
 
         return web.json_response({
-            "currentDrive": str(currentDrive),
+            "currentDrive": normalize_api_path(str(currentDrive)),
             "drives":[obj.to_dict() for obj in external_mounts]
         })
 

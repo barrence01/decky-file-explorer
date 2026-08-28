@@ -5,10 +5,12 @@ import pytest
 
 from path_utils import (
     build_breadcrumbs,
+    build_error_context,
     can_navigate_up,
     get_parent_path,
     join_api_path,
     normalize_api_path,
+    validate_path_segment,
 )
 
 
@@ -30,6 +32,25 @@ def test_join_api_path_rejects_invalid_name():
 
     with pytest.raises(ValueError):
         join_api_path("/home/deck", "folder/name")
+
+
+def test_validate_path_segment_accepts_valid_name():
+    assert validate_path_segment("Documents") == "Documents"
+
+
+def test_validate_path_segment_rejects_control_chars():
+    with pytest.raises(ValueError):
+        validate_path_segment("bad\x01name")
+
+
+def test_build_error_context(tmp_path: Path):
+    child = tmp_path / "docs"
+    child.mkdir()
+
+    context = build_error_context(child.resolve(), tmp_path.resolve())
+
+    assert context["parentPath"] == normalize_api_path(tmp_path)
+    assert context["canNavigateUp"] is True
 
 
 def test_get_parent_path_nested(tmp_path: Path):

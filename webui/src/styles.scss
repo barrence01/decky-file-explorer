@@ -142,7 +142,49 @@ header {
   cursor: pointer;
 }
 
-/* ---------- Toolbar ---------- */
+/* ---------- File explorer ---------- */
+.file-explorer-view--mobile .file-list {
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+.directory-error-banner {
+  margin: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.directory-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.directory-error-actions button {
+  padding: 6px 12px;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  background: #fff;
+  color: #991b1b;
+  cursor: pointer;
+}
+
+.file-item.protected-file {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+header .header-title {
+  margin-left: auto;
+}
+
 .toolbar {
   background: #fff;
   padding: 8px;

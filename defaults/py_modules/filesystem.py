@@ -9,9 +9,12 @@ import os, subprocess, json
 
 from path_utils import (
     build_breadcrumbs,
+    build_error_context,
     can_navigate_up,
     get_parent_path,
     normalize_api_path,
+    resolve_destination,
+    validate_path_segment,
 )
 
 DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
@@ -23,6 +26,23 @@ DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
 
 class FileSystemError(Exception):
     pass
+
+
+class PathAccessError(FileSystemError):
+    def __init__(
+        self,
+        message: str,
+        path: str,
+        parent_path: str | None,
+        can_navigate_up: bool,
+        code: str = "access_denied",
+    ):
+        super().__init__(message)
+        self.path = path
+        self.parent_path = parent_path
+        self.can_navigate_up = can_navigate_up
+        self.code = code
+
 
 class FileAlreadyExistsError(Exception):
     pass
@@ -211,19 +231,19 @@ class FileSystemObject:
     def isHidden(self) -> bool:
         return self.path.name.startswith(".")
     
-    # def isProtected(self) -> bool:
-    #     try:
-    #         self.path.stat()
+    def isProtected(self) -> bool:
+        try:
+            self.path.stat()
 
-    #         if self.isDir():
-    #             os.listdir(self.path)
-    #         else:
-    #             with open(self.path, "rb"):
-    #                 pass
+            if self.isDir():
+                os.listdir(self.path)
+            else:
+                with open(self.path, "rb"):
+                    pass
 
-    #         return False
-    #     except (PermissionError, OSError):
-    #         return True
+            return False
+        except (PermissionError, OSError):
+            return True
 
     # ---- Directory / file info ----
     def getDirectoryPath(self) -> str:
@@ -269,7 +289,7 @@ class FileSystemObject:
             "isDir": self.isDir(),
             "isFile": self.isFile(),
             "isHidden": self.isHidden(),
-            #"isProtected": self.isProtected(),
+            "isProtected": self.isProtected(),
             "directory": self.getDirectoryPath(),
         }
 
@@ -353,14 +373,36 @@ class FileSystemService:
         return p
 
 
+    def _raise_path_access_error(self, directory: Path, message: str) -> None:
+        parent_path = get_parent_path(directory, self.base_dir)
+        raise PathAccessError(
+            message,
+            normalize_api_path(directory),
+            parent_path,
+            parent_path is not None,
+        )
+
     # ---- Directory operations ----
     def list_dir(self, path: str = "") -> List[FileSystemObject]:
         directory = self._resolve(path)
 
-        if not directory.exists() or not directory.is_dir():
-            raise FileNotFoundError("Directory not found")
+        if not directory.exists():
+            context = build_error_context(directory, self.base_dir)
+            raise PathAccessError(
+                "Directory not found",
+                normalize_api_path(directory),
+                context["parentPath"],
+                context["canNavigateUp"],
+                code="not_found",
+            )
 
-        return [FileSystemObject(p) for p in directory.iterdir()]
+        if not directory.is_dir():
+            raise NotADirectoryError("Path is not a directory")
+
+        try:
+            return [FileSystemObject(p) for p in directory.iterdir()]
+        except PermissionError:
+            self._raise_path_access_error(directory, "Access denied")
 
     def create_dir(self, path: str):
         directory = self._resolve(path)
@@ -418,7 +460,8 @@ class FileSystemService:
 
     def rename(self, path: str, new_name: str):
         src = self._resolve(path)
-        dst = src.parent / new_name
+        dst = resolve_destination(src.parent, new_name, self.base_dir)
+        self._resolve(normalize_api_path(dst))
         src.rename(dst)
 
     # ---- Info ----

@@ -1,3 +1,5 @@
+import { getFileNameFromPath } from './path-utils';
+
 export const HIGHLIGHT_FOLDERS = [
   'Downloads',
   'Pictures',
@@ -45,11 +47,7 @@ export function getFileName(file: { path: string; isDir: boolean; name?: string 
     return file.name;
   }
 
-  if (file.path.includes('\\')) {
-    return file.path.split('\\').pop() ?? file.path;
-  }
-
-  return file.path.split('/').pop() ?? file.path;
+  return getFileNameFromPath(file.path);
 }
 
 export function shouldHighlightFolder(file: { isDir: boolean; path: string }): boolean {

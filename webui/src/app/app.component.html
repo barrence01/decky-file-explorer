@@ -1,7 +1,6 @@
 <app-side-panel
   [visible]="sidePanelVisible()"
   (closePanel)="closeSidePanel()"
-  (driveSelected)="onDriveSelected($event)"
 />
 
 @if (showSidePanelBackdrop) {
@@ -33,10 +32,17 @@
         }
       }
     </nav>
-    <h1 class="header-title" style="margin-left: auto">Steam Deck File Explorer</h1>
+    @if (showDriveSelector && !isCompactView()) {
+      <app-drive-selector (driveSelected)="onDriveSelected($event)" />
+    }
+    <h1 class="header-title">Steam Deck File Explorer</h1>
   </header>
 
   <router-outlet />
+
+  @if (showDriveSelector && isCompactView()) {
+    <app-drive-selector-overlay (driveSelected)="onDriveSelected($event)" />
+  }
 </div>
 
 <app-loading-overlay />
