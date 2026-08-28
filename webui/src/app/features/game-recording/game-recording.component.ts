@@ -7,11 +7,19 @@ import { FileExplorerStateService } from '../../core/services/file-system.servic
 import { NavigationStateService } from '../../core/services/navigation-state.service';
 import { ApiError } from '../../core/models/api-error.model';
 import { PreviewModalComponent } from '../../shared/components/preview-modal/preview-modal.component';
+import { DialogService } from '../../core/services/dialog.service';
+import { isCompactView } from '../../core/utils/file-utils';
+import { LongPressDirective } from '../../shared/directives/long-press.directive';
+
+interface OverflowMenuItem {
+  label: string;
+  action: () => void;
+}
 
 @Component({
   selector: 'app-game-recording',
   standalone: true,
-  imports: [PreviewModalComponent],
+  imports: [PreviewModalComponent, LongPressDirective],
   template: `
     <div class="game-recording-view">
       <div class="toolbar" id="toolbar">
@@ -19,7 +27,7 @@ import { PreviewModalComponent } from '../../shared/components/preview-modal/pre
           <i class="fas fa-rotate-right"></i>
           <span>Refresh</span>
         </button>
-        @if (selectedClip()) {
+        @if (selectedClip() && !isCompactView()) {
           <button class="btn-interactive" type="button" (click)="assemble(false)">
             <i class="fas fa-cogs"></i>
             <span>Assemble</span>
@@ -29,6 +37,22 @@ import { PreviewModalComponent } from '../../shared/components/preview-modal/pre
             <span>Assemble for browser playback</span>
           </button>
         }
+        @if (selectedClip() && isCompactView()) {
+          <div class="overflow-menu">
+            <button class="toolbar-btn btn-interactive" type="button" (click)="openOverflowMenu()">
+              <i class="fas fa-ellipsis-vertical"></i>
+            </button>
+            @if (overflowMenuOpen()) {
+              <div class="overflow-menu-content">
+                @for (item of overflowMenuItems(); track item.label) {
+                  <div class="overflow-menu-item" (click)="runOverflowAction(item)">
+                    {{ item.label }}
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
       </div>
 
       <div class="file-list" id="fileList">
@@ -36,8 +60,11 @@ import { PreviewModalComponent } from '../../shared/components/preview-modal/pre
           <div
             class="file-item"
             [class.selected]="selectedClip()?.clipId === clip.clipId"
-            (click)="selectClip(clip)"
-            (dblclick)="openPreview(clip)"
+            (click)="!isCompactView() && selectClip(clip)"
+            (dblclick)="!isCompactView() && openPreview(clip)"
+            appLongPress
+            (longPress)="isCompactView() && selectClip(clip)"
+            (shortPress)="isCompactView() && onMobileShortPress(clip)"
           >
             <img
               class="clip-thumbnail"
@@ -65,15 +92,19 @@ export class GameRecordingComponent implements OnInit {
   private readonly feedbackService = inject(FeedbackService);
   private readonly state = inject(FileExplorerStateService);
   private readonly navigationState = inject(NavigationStateService);
+  private readonly dialogService = inject(DialogService);
 
   readonly clips = signal<SteamClip[]>([]);
   readonly selectedClip = signal<SteamClip | null>(null);
   readonly previewVisible = signal(false);
   readonly previewThumbnailUrl = signal<string | null>(null);
+  readonly overflowMenuOpen = signal(false);
+  readonly overflowMenuItems = signal<OverflowMenuItem[]>([]);
+  readonly isCompactView = isCompactView;
 
   ngOnInit(): void {
     this.state.clearClipboard();
-    this.navigationState.setBreadcrumb('/steam/clips');
+    this.navigationState.setBreadcrumbs([{ name: 'Steam Clips', path: '/steam/clips' }]);
     void this.loadClips();
   }
 
@@ -94,6 +125,15 @@ export class GameRecordingComponent implements OnInit {
     this.selectedClip.set(clip);
   }
 
+  onMobileShortPress(clip: SteamClip): void {
+    if (this.selectedClip()?.clipId === clip.clipId) {
+      this.openPreview(clip);
+      return;
+    }
+
+    this.selectClip(clip);
+  }
+
   openPreview(clip: SteamClip): void {
     this.previewThumbnailUrl.set(this.gameRecordingService.getThumbnailUrl(clip.clipId));
     this.previewVisible.set(true);
@@ -107,6 +147,19 @@ export class GameRecordingComponent implements OnInit {
   onThumbnailError(event: Event): void {
     const image = event.target as HTMLImageElement;
     image.style.display = 'none';
+  }
+
+  openOverflowMenu(): void {
+    this.overflowMenuItems.set([
+      { label: 'Assemble', action: () => this.assemble(false) },
+      { label: 'Assemble for browser playback', action: () => this.assemble(true) },
+    ]);
+    this.overflowMenuOpen.set(true);
+  }
+
+  runOverflowAction(item: OverflowMenuItem): void {
+    this.overflowMenuOpen.set(false);
+    item.action();
   }
 
   async assemble(browserCompatible: boolean, overwrite = false): Promise<void> {
@@ -128,9 +181,11 @@ export class GameRecordingComponent implements OnInit {
         );
       } catch (error) {
         if (error instanceof ApiError && error.status === 409) {
-          const confirmed = confirm(
-            'The following file already exist in folder. Overwrite them?'
-          );
+          const confirmed = await this.dialogService.confirm({
+            title: 'Overwrite file',
+            message: 'A file already exists in the folder. Overwrite it?',
+            confirmLabel: 'Overwrite',
+          });
           if (confirmed) {
             await this.assemble(browserCompatible, true);
           }

@@ -1,5 +1,12 @@
+export interface BreadcrumbSegment {
+  name: string;
+  path: string;
+}
+
 export interface FileSystemObject {
   path: string;
+  parentPath?: string | null;
+  canNavigateUp?: boolean;
   isDir: boolean;
   isFile: boolean;
   isHidden: boolean;
@@ -15,6 +22,7 @@ export interface FileSystemObject {
 export interface DirectoryListResponse {
   selectedDir: FileSystemObject;
   selectedDrive: string;
+  breadcrumbs: BreadcrumbSegment[];
   dirContent: FileSystemObject[];
 }
 

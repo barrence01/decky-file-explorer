@@ -4,16 +4,35 @@
   (driveSelected)="onDriveSelected($event)"
 />
 
+@if (showSidePanelBackdrop) {
+  <div class="side-panel-backdrop" (click)="closeSidePanel()"></div>
+}
+
 <div
   id="mainContent"
-  [class.shifted]="mainContentShifted()"
+  [class.shifted]="mainContentShifted"
   [class.loading]="false"
 >
   <app-feedback-bars />
 
   <header>
     <i class="fas fa-bars hamburger" (click)="toggleSidePanel()"></i>
-    <div class="breadcrumb" id="breadcrumb">{{ navigationState.breadcrumb() }}</div>
+    <nav class="breadcrumb" id="breadcrumb" aria-label="Breadcrumb">
+      @for (segment of navigationState.breadcrumbs(); track segment.path; let last = $last) {
+        @if (!last) {
+          <button
+            class="breadcrumb-segment"
+            type="button"
+            (click)="navigationState.navigateTo(segment.path)"
+          >
+            {{ segment.name }}
+          </button>
+          <span class="breadcrumb-separator">/</span>
+        } @else {
+          <span class="breadcrumb-current">{{ segment.name }}</span>
+        }
+      }
+    </nav>
     <h1 class="header-title" style="margin-left: auto">Steam Deck File Explorer</h1>
   </header>
 
@@ -21,3 +40,4 @@
 </div>
 
 <app-loading-overlay />
+<app-dialog-host />

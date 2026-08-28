@@ -1,3 +1,12 @@
+/* ---------- Design Tokens ---------- */
+:root {
+  --bp-sm: 480px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --touch-target: 44px;
+  --sidebar-width: 230px;
+}
+
 /* ---------- Default Style ---------- */
 body {
   margin: 0;
@@ -24,6 +33,14 @@ header {
   }
 }
 
+@media (max-width: 768px) {
+  .toolbar button,
+  .btn-interactive {
+    min-height: var(--touch-target);
+    padding: 8px 12px;
+  }
+}
+
 .hamburger {
   font-size: 40px;
   cursor: pointer;
@@ -44,7 +61,38 @@ header {
 }
 
 .breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  min-width: 0;
+  scrollbar-width: thin;
+}
+
+.breadcrumb-segment {
+  background: none;
+  border: none;
+  color: #93c5fd;
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: inherit;
+  white-space: nowrap;
+}
+
+.breadcrumb-segment:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb-separator {
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.breadcrumb-current {
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -71,7 +119,7 @@ header {
   background: #fff;
   padding: 24px;
   border-radius: 8px;
-  width: 300px;
+  width: min(300px, calc(100vw - 32px));
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
 
@@ -124,6 +172,13 @@ header {
   gap: 12px;
 }
 
+@media (max-width: 480px) {
+  .file-list {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
+  }
+}
+
 .file-item {
   background: #fff;
   border-radius: 6px;
@@ -169,7 +224,74 @@ header {
   color: #fff;
   padding: 16px;
   border-radius: 8px;
-  width: 320px;
+  width: min(480px, calc(100vw - 32px));
+}
+
+.dialog-content {
+  width: min(480px, calc(100vw - 32px));
+}
+
+.dialog-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #444;
+  border-radius: 6px;
+  background: #2a2a2a;
+  color: #fff;
+  font-size: 16px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.dialog-btn {
+  min-height: 36px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.dialog-btn-primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.dialog-btn-secondary {
+  background: #374151;
+  color: #fff;
+}
+
+.dialog-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dialog-conflict-list {
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 12px 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .dialog-btn {
+    min-height: var(--touch-target);
+    padding: 10px 18px;
+  }
 }
 
 .modal-header {
@@ -298,8 +420,26 @@ header {
 }
 
 #mainContent.shifted {
-  transform: translateX(230px);
-  width: calc(100% - 230px);
+  transform: translateX(var(--sidebar-width));
+  width: calc(100% - var(--sidebar-width));
+}
+
+.side-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1400;
+}
+
+@media (max-width: 768px) {
+  #mainContent.shifted {
+    transform: none;
+    width: 100%;
+  }
+
+  .side-panel.visible {
+    z-index: 1500;
+  }
 }
 
 /* ---------- Web View ---------- */

@@ -7,6 +7,13 @@ import zipfile
 import io
 import os, subprocess, json
 
+from path_utils import (
+    build_breadcrumbs,
+    can_navigate_up,
+    get_parent_path,
+    normalize_api_path,
+)
+
 DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
 
 
@@ -39,7 +46,7 @@ class DriveInfo:
 
     def to_dict(self) -> dict:
         return {
-            "path": str(self.path),
+            "path": normalize_api_path(self.path),
             "fstype": self.fstype,
             "removable": self.removable,
             "transport": self.transport
@@ -220,7 +227,8 @@ class FileSystemObject:
 
     # ---- Directory / file info ----
     def getDirectoryPath(self) -> str:
-        return str(self.path if self.isDir() else self.path.parent)
+        directory = self.path if self.isDir() else self.path.parent
+        return normalize_api_path(directory)
     
     def getItemsCount(self) -> int:
         if not self.isDir():
@@ -255,15 +263,19 @@ class FileSystemObject:
 
         return mime.split("/")[0] 
 
-    def to_dict(self) -> dict:
+    def to_dict(self, base_dir: Path | None = None) -> dict:
         data = {
-            "path": str(self.path),
+            "path": normalize_api_path(self.path),
             "isDir": self.isDir(),
             "isFile": self.isFile(),
             "isHidden": self.isHidden(),
             #"isProtected": self.isProtected(),
             "directory": self.getDirectoryPath(),
         }
+
+        if base_dir is not None and self.isDir():
+            data["parentPath"] = get_parent_path(self.path, base_dir)
+            data["canNavigateUp"] = can_navigate_up(self.path, base_dir)
 
         if self.isDir():
             data.update({
@@ -417,6 +429,18 @@ class FileSystemService:
             raise FileNotFoundError("Path does not exist")
 
         return FileSystemObject(p)
+
+    def build_directory_metadata(self, path: str) -> dict:
+        directory = self.get_object(path)
+
+        if not directory.isDir():
+            raise NotADirectoryError("Path is not a directory")
+
+        resolved = directory.path
+        return {
+            "selectedDir": directory.to_dict(self.base_dir),
+            "breadcrumbs": build_breadcrumbs(resolved, self.base_dir),
+        }
 
     # ---- Streaming ----
     def stream_read(self, path: str, chunk_size: int = DEFAULT_CHUNK_SIZE):

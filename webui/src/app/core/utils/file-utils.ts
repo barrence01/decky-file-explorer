@@ -61,25 +61,6 @@ export function shouldHighlightFolder(file: { isDir: boolean; path: string }): b
   return HIGHLIGHT_FOLDERS.includes(name);
 }
 
-export function getParentPath(path: string | null): string | null {
-  if (!path) {
-    return null;
-  }
-
-  const parts = path.replaceAll('\\', '/').replace(/\/+$/, '').split('/');
-
-  if (path.includes('C:') || path.includes('/home/decky')) {
-    if (parts.length <= 3) {
-      return null;
-    }
-  } else if (path.includes(':') || parts.length <= 1) {
-    return null;
-  }
-
-  parts.pop();
-  return parts.join('/') || '/';
-}
-
-export function isMobilePointer(): boolean {
-  return window.matchMedia('(pointer: coarse)').matches;
+export function isCompactView(): boolean {
+  return window.matchMedia('(max-width: 768px), (pointer: coarse)').matches;
 }

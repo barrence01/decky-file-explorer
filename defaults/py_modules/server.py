@@ -9,6 +9,7 @@ import os
 import socket
 import bcrypt
 from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError, get_all_drives, get_drive_root
+from path_utils import join_api_path, normalize_api_path
 import decky
 import gamerecording
 import subprocess
@@ -353,24 +354,23 @@ class WebServer:
             path = server_settings.get_base_dir()
 
         try:
-            selected_dir = self.fs.get_object(path)
-            selected_drive = get_drive_root(path)
+            metadata = self.fs.build_directory_metadata(path)
+            resolved_path = metadata["selectedDir"]["path"]
 
-            if not selected_dir.isDir():
-                return web.json_response(
-                    {"error": "Path is not a directory"},
-                    status=400
-                )
+            try:
+                selected_drive = normalize_api_path(get_drive_root(resolved_path))
+            except Exception:
+                selected_drive = resolved_path
 
             items = self.fs.list_dir(path)
 
             return web.json_response({
-                "selectedDir": selected_dir.to_dict(),
-                "selectedDrive":str(selected_drive),
+                **metadata,
+                "selectedDrive": selected_drive,
                 "dirContent": [obj.to_dict() for obj in items]
             })
 
-        except (FileSystemError, FileNotFoundError) as e:
+        except (FileSystemError, FileNotFoundError, NotADirectoryError) as e:
             return web.json_response(
                 {"error": str(e)},
                 status=400
@@ -434,7 +434,7 @@ class WebServer:
 
         for src in paths:
             name = Path(src).name
-            dst = f"{target_dir.rstrip('/')}/{name}"
+            dst = join_api_path(target_dir, name)
 
             try:
                 if mode == "copy":
@@ -461,9 +461,16 @@ class WebServer:
         decky.logger.info("create_dir - Initiated")
         data = await request.json()
         path = data.get("path")
+        parent_path = data.get("parentPath")
+        name = data.get("name")
 
         if not path:
-            raise web.HTTPBadRequest(reason="Missing path")
+            if not parent_path or not name:
+                raise web.HTTPBadRequest(reason="Missing path")
+            try:
+                path = join_api_path(parent_path, name)
+            except ValueError as e:
+                raise web.HTTPBadRequest(reason=str(e))
         decky.logger.info(f"create_dir - Creating folder {path}")
 
         try:

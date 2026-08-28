@@ -132,6 +132,10 @@ async def test_list_dir(client, fs):
     data = await res.json()
 
     assert data["selectedDir"]["isDir"] is True
+    assert "parentPath" in data["selectedDir"]
+    assert "canNavigateUp" in data["selectedDir"]
+    assert "breadcrumbs" in data
+    assert isinstance(data["breadcrumbs"], list)
     assert len(data["dirContent"]) == 1
 
 
@@ -175,6 +179,20 @@ async def test_delete_without_paths(client):
 
     res = await client.post("/api/dir/delete", json={})
     assert res.status == 400
+
+@pytest.mark.asyncio
+async def test_create_dir_with_parent_and_name(client, fs):
+    await login(client)
+
+    fs.create_dir("parent")
+
+    res = await client.post(
+        "/api/dir/create",
+        json={"parentPath": str(fs.base_dir / "parent"), "name": "child"},
+    )
+    assert res.status == 200
+    assert (fs.base_dir / "parent" / "child").exists()
+
 
 @pytest.mark.asyncio
 async def test_create_dir_already_exists(client, fs):

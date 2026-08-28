@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, inject, signal } from '@angular/core';
+import { Component, OnInit, effect, inject, signal, HostListener } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { FileSystemObject } from '../../core/models/file-system.model';
 import {
@@ -12,8 +12,7 @@ import { ApiError } from '../../core/models/api-error.model';
 import { PasteConflictResponse } from '../../core/models/file-system.model';
 import {
   getFileName,
-  getParentPath,
-  isMobilePointer,
+  isCompactView,
   shouldHighlightFolder,
   truncateString,
 } from '../../core/utils/file-utils';
@@ -23,6 +22,7 @@ import { UploadModalComponent } from '../../shared/components/upload-modal/uploa
 import { LongPressDirective } from '../../shared/directives/long-press.directive';
 import { DriveStateService } from '../../core/services/drive-state.service';
 import { NavigationStateService } from '../../core/services/navigation-state.service';
+import { DialogService } from '../../core/services/dialog.service';
 
 interface OverflowMenuItem {
   label: string;
@@ -50,6 +50,7 @@ export class FileExplorerComponent implements OnInit {
   private readonly uploadService = inject(UploadService);
   private readonly driveState = inject(DriveStateService);
   private readonly navigationState = inject(NavigationStateService);
+  private readonly dialogService = inject(DialogService);
 
   readonly propertiesVisible = signal(false);
   readonly previewVisible = signal(false);
@@ -62,7 +63,7 @@ export class FileExplorerComponent implements OnInit {
   readonly truncateString = truncateString;
   readonly getFileName = getFileName;
   readonly shouldHighlightFolder = shouldHighlightFolder;
-  readonly isMobile = isMobilePointer;
+  readonly isCompactView = isCompactView;
 
   constructor() {
     effect(() => {
@@ -96,7 +97,11 @@ export class FileExplorerComponent implements OnInit {
   }
 
   get parentPath(): string | null {
-    return getParentPath(this.state.currentPath());
+    return this.state.selectedDir()?.parentPath ?? null;
+  }
+
+  get canNavigateUp(): boolean {
+    return this.state.selectedDir()?.canNavigateUp ?? false;
   }
 
   get propertiesTarget(): FileSystemObject | null {
@@ -121,7 +126,7 @@ export class FileExplorerComponent implements OnInit {
         this.state.selectedDir.set(data.selectedDir);
         this.state.currentPath.set(data.selectedDir.path);
         this.state.dirContent.set(data.dirContent);
-        this.navigationState.setBreadcrumb(data.selectedDir.path);
+        this.navigationState.setBreadcrumbs(data.breadcrumbs);
         await this.driveState.refresh(data.selectedDir.path);
       } catch (error) {
         this.feedbackService.showError(this.extractError(error, 'Failed to load directory'));
@@ -252,9 +257,12 @@ export class FileExplorerComponent implements OnInit {
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         const files = (error.payload as PasteConflictResponse | undefined)?.files ?? [];
-        const confirmed = confirm(
-          `The following files already exist:\n\n${files.join('\n')}\n\nOverwrite them?`
-        );
+        const confirmed = await this.dialogService.confirm({
+          title: 'Overwrite files',
+          message: 'The following files already exist. Overwrite them?',
+          confirmLabel: 'Overwrite',
+          conflictFiles: files,
+        });
         if (confirmed) {
           await this.pasteClipboard(true);
         }
@@ -271,7 +279,12 @@ export class FileExplorerComponent implements OnInit {
       return;
     }
 
-    if (!confirm(`Delete ${selectedItems.length} item(s)?`)) {
+    const confirmed = await this.dialogService.confirm({
+      title: 'Delete items',
+      message: `Delete ${selectedItems.length} item(s)?`,
+      confirmLabel: 'Delete',
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -291,7 +304,12 @@ export class FileExplorerComponent implements OnInit {
       return;
     }
 
-    const newName = prompt('New name:', item.name || getFileName(item));
+    const newName = await this.dialogService.prompt({
+      title: 'Rename',
+      label: 'New name',
+      initialValue: item.name || getFileName(item),
+      confirmLabel: 'Rename',
+    });
     if (!newName) {
       return;
     }
@@ -305,16 +323,22 @@ export class FileExplorerComponent implements OnInit {
   }
 
   async createNewFolder(): Promise<void> {
-    const folderName = prompt('Enter folder name:');
     const currentPath = this.state.currentPath();
-    if (!folderName || !currentPath) {
+    if (!currentPath) {
       return;
     }
 
-    const targetPath = `${currentPath}/${folderName}`;
+    const folderName = await this.dialogService.prompt({
+      title: 'New Folder',
+      label: 'Folder name',
+      confirmLabel: 'Create',
+    });
+    if (!folderName) {
+      return;
+    }
 
     try {
-      await this.fileSystemService.createDirectory(targetPath);
+      await this.fileSystemService.createDirectory(currentPath, folderName);
       await this.loadDirectory(currentPath);
     } catch (error) {
       this.feedbackService.showError(this.extractError(error, 'Failed to create folder'));

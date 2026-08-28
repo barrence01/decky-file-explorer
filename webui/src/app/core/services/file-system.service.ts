@@ -42,11 +42,11 @@ export class FileSystemService {
     );
   }
 
-  createDirectory(path: string): Promise<{ status: string }> {
+  createDirectory(parentPath: string, name: string): Promise<{ status: string }> {
     return firstValueFrom(
       this.http.post<{ status: string }>(
         '/api/dir/create',
-        { path },
+        { parentPath, name },
         { withCredentials: true }
       )
     );
