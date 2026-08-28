@@ -173,7 +173,7 @@ export class FileExplorerComponent implements OnInit {
   }
 
   goHome(): void {
-    void this.loadDirectory(null);
+    this.navigationState.requestDirectory(null);
   }
 
   handleDirectoryError(error: unknown): void {

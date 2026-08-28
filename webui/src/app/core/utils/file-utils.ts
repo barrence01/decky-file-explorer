@@ -207,6 +207,13 @@ export function truncateString(value: string, maxLength: number): string {
   return `${value.slice(0, maxLength - 3)}...`;
 }
 
+export function truncateStringStart(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `...${value.slice(-(maxLength - 3))}`;
+}
+
 export function formatSize(bytes?: number): string {
   if (!bytes || bytes === 0) {
     return '0 B';

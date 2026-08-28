@@ -7,6 +7,7 @@ export class NavigationStateService {
   readonly directoryRequest = signal<string | null | undefined>(undefined);
 
   requestDirectory(path: string | null): void {
+    this.directoryRequest.set(undefined);
     this.directoryRequest.set(path);
   }
 

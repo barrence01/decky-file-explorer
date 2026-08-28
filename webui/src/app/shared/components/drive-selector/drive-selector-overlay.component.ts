@@ -2,7 +2,7 @@ import { Component, EventEmitter, Output, inject } from '@angular/core';
 import { DriveStateService } from '../../../core/services/drive-state.service';
 import { FileExplorerStateService } from '../../../core/services/file-system.service';
 import { DriveInfo } from '../../../core/models/drive.model';
-import { truncateString } from '../../../core/utils/file-utils';
+import { truncateStringStart } from '../../../core/utils/file-utils';
 
 @Component({
   selector: 'app-drive-selector-overlay',
@@ -15,7 +15,7 @@ import { truncateString } from '../../../core/utils/file-utils';
       [title]="driveState.currentDrive()"
     >
       <i class="fas fa-hard-drive"></i>
-      <span>{{ truncateString(driveState.currentDrive(), 16) }}</span>
+      <span>{{ truncateStringStart(driveState.currentDrive(), 16) }}</span>
     </button>
 
     @if (driveState.showPicker()) {
@@ -64,6 +64,8 @@ import { truncateString } from '../../../core/utils/file-utils';
     }
 
     .drive-overlay-trigger span {
+      direction: rtl;
+      text-align: left;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -134,7 +136,7 @@ export class DriveSelectorOverlayComponent {
 
   readonly driveState = inject(DriveStateService);
   private readonly explorerState = inject(FileExplorerStateService);
-  readonly truncateString = truncateString;
+  readonly truncateStringStart = truncateStringStart;
 
   async onTriggerClick(): Promise<void> {
     if (this.driveState.showPicker()) {

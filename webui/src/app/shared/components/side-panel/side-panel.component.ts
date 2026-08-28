@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { FileExplorerStateService } from '../../../core/services/file-system.service';
+import { NavigationStateService } from '../../../core/services/navigation-state.service';
 
 @Component({
   selector: 'app-side-panel',
@@ -29,11 +30,14 @@ export class SidePanelComponent {
   readonly authService = inject(AuthService);
   private readonly router = inject(Router);
   private readonly state = inject(FileExplorerStateService);
+  private readonly navigationState = inject(NavigationStateService);
 
   navigateHome(): void {
     this.state.clearClipboard();
     this.closePanel.emit();
-    void this.router.navigate(['/files']);
+    void this.router.navigate(['/files']).then(() => {
+      this.navigationState.requestDirectory(null);
+    });
   }
 
   navigateRecordings(): void {
