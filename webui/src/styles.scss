@@ -170,8 +170,33 @@ header {
 }
 
 /* ---------- File explorer ---------- */
+.file-explorer-view {
+  position: relative;
+  min-height: calc(100vh - 56px);
+}
+
 .file-explorer-view--mobile .file-list {
   padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+.file-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(37, 99, 235, 0.12);
+  border: 2px dashed #2563eb;
+  color: #1d4ed8;
+  font-size: 16px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.file-explorer-view--drop-active {
+  outline: 2px solid rgba(37, 99, 235, 0.35);
+  outline-offset: -2px;
 }
 
 .directory-error-banner {

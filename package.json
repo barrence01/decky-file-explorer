@@ -1,6 +1,6 @@
 {
   "name": "decky-file-explorer",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "description": "Remote access to your Steam Deck files.",
   "type": "module",
   "scripts": {

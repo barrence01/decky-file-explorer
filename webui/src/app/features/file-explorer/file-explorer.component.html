@@ -1,4 +1,12 @@
-<div class="file-explorer-view" [class.file-explorer-view--mobile]="isCompactView()">
+<div
+  class="file-explorer-view"
+  [class.file-explorer-view--mobile]="isCompactView()"
+  [class.file-explorer-view--drop-active]="dropActive()"
+  appFileDrop
+  [fileDropDisabled]="fileDropDisabled"
+  (filesDropped)="onFilesDropped($event)"
+  (dragActiveChange)="onDropActiveChange($event)"
+>
   @if (isCompactView()) {
     <app-file-explorer-mobile-toolbar
       [actions]="toolbarActions"
@@ -19,6 +27,10 @@
         <button type="button" (click)="goHome()">Go Home</button>
       </div>
     </div>
+  }
+
+  @if (dropActive()) {
+    <div class="file-drop-overlay">Drop files to upload</div>
   }
 
   <div class="file-list" id="fileList">

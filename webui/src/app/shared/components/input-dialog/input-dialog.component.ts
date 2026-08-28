@@ -1,4 +1,4 @@
-import { Component, HostListener, inject, effect } from '@angular/core';
+import { Component, ElementRef, HostListener, inject, effect, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DialogService } from '../../../core/services/dialog.service';
 
@@ -25,6 +25,7 @@ import { DialogService } from '../../../core/services/dialog.service';
               <label class="dialog-label" [for]="inputId">{{ dialog.label }}</label>
             }
             <input
+              #inputField
               [id]="inputId"
               class="dialog-input"
               type="text"
@@ -57,12 +58,20 @@ import { DialogService } from '../../../core/services/dialog.service';
 export class InputDialogComponent {
   readonly dialogService = inject(DialogService);
   readonly inputId = 'dialog-input-field';
+  private readonly inputField = viewChild<ElementRef<HTMLInputElement>>('inputField');
   value = '';
 
   constructor() {
     effect(() => {
       const dialog = this.dialogService.activePrompt();
       this.value = dialog?.initialValue ?? '';
+      if (dialog?.initialValue) {
+        queueMicrotask(() => {
+          const input = this.inputField()?.nativeElement;
+          input?.focus();
+          input?.select();
+        });
+      }
     });
   }
 

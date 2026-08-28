@@ -22,6 +22,7 @@ import { PropertiesModalComponent } from '../../shared/components/properties-mod
 import { PreviewModalComponent } from '../../shared/components/preview-modal/preview-modal.component';
 import { UploadModalComponent } from '../../shared/components/upload-modal/upload-modal.component';
 import { LongPressDirective } from '../../shared/directives/long-press.directive';
+import { FileDropDirective } from '../../shared/directives/file-drop.directive';
 import { DriveStateService } from '../../core/services/drive-state.service';
 import { NavigationStateService } from '../../core/services/navigation-state.service';
 import { DialogService } from '../../core/services/dialog.service';
@@ -38,6 +39,7 @@ import { OverflowMenuItem, ToolbarActions } from './toolbar/toolbar-actions';
     PreviewModalComponent,
     UploadModalComponent,
     LongPressDirective,
+    FileDropDirective,
     FileExplorerToolbarComponent,
     FileExplorerMobileToolbarComponent,
   ],
@@ -60,6 +62,7 @@ export class FileExplorerComponent implements OnInit {
   readonly uploadProgress = signal(0);
   readonly showDirectoryError = signal(false);
   readonly directoryErrorMessage = signal('');
+  readonly dropActive = signal(false);
 
   readonly truncateString = truncateString;
   readonly getFileName = getFileName;
@@ -115,6 +118,10 @@ export class FileExplorerComponent implements OnInit {
     }
 
     return null;
+  }
+
+  get fileDropDisabled(): boolean {
+    return !this.state.currentPath() || this.showDirectoryError();
   }
 
   get toolbarActions(): ToolbarActions {
@@ -430,6 +437,7 @@ export class FileExplorerComponent implements OnInit {
       title: 'New Folder',
       label: 'Folder name',
       confirmLabel: 'Create',
+      initialValue: 'New Folder',
     });
     if (!folderName) {
       return;
@@ -449,26 +457,57 @@ export class FileExplorerComponent implements OnInit {
     input.multiple = true;
 
     input.onchange = async () => {
-      const currentPath = this.state.currentPath();
-      if (!input.files?.length || !currentPath) {
+      if (!input.files?.length) {
         return;
       }
 
-      this.uploadVisible.set(true);
-      this.uploadProgress.set(0);
-
-      for (const file of Array.from(input.files)) {
-        const uploaded = await this.uploadFileWithConflictHandling(currentPath, file);
-        if (!uploaded) {
-          break;
-        }
-      }
-
-      this.uploadVisible.set(false);
-      await this.loadDirectory(currentPath);
+      await this.uploadFilesList(Array.from(input.files));
     };
 
     input.click();
+  }
+
+  onFilesDropped(files: File[]): void {
+    if (!files.length) {
+      this.feedbackService.showError('Only files are supported for now.');
+      return;
+    }
+
+    if (this.fileDropDisabled) {
+      return;
+    }
+
+    const currentPath = this.state.currentPath();
+    if (!currentPath) {
+      this.feedbackService.showError('No folder is open to upload files.');
+      return;
+    }
+
+    void this.uploadFilesList(files);
+  }
+
+  onDropActiveChange(active: boolean): void {
+    this.dropActive.set(active);
+  }
+
+  private async uploadFilesList(files: File[]): Promise<void> {
+    const currentPath = this.state.currentPath();
+    if (!currentPath || !files.length) {
+      return;
+    }
+
+    this.uploadVisible.set(true);
+    this.uploadProgress.set(0);
+
+    for (const file of files) {
+      const uploaded = await this.uploadFileWithConflictHandling(currentPath, file);
+      if (!uploaded) {
+        break;
+      }
+    }
+
+    this.uploadVisible.set(false);
+    await this.loadDirectory(currentPath);
   }
 
   private async uploadFileWithConflictHandling(
