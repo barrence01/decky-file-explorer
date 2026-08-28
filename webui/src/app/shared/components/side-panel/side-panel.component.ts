@@ -54,7 +54,7 @@ export class SidePanelComponent {
       return;
     }
 
-    await this.driveState.refresh(this.state.currentPath);
+    await this.driveState.refresh(this.state.currentPath());
     this.driveState.togglePicker();
   }
 
@@ -78,7 +78,7 @@ export class SidePanelComponent {
 
   async logoff(): Promise<void> {
     this.state.clearClipboard();
-    this.state.currentPath = null;
+    this.state.currentPath.set(null);
     await this.authService.logoff();
     this.closePanel.emit();
     void this.router.navigate(['/login']);

@@ -13,7 +13,7 @@ import { PreviewModalComponent } from '../../shared/components/preview-modal/pre
   standalone: true,
   imports: [PreviewModalComponent],
   template: `
-    <div id="fileView">
+    <div class="game-recording-view">
       <div class="toolbar" id="toolbar">
         <button class="btn-interactive" type="button" (click)="loadClips()">
           <i class="fas fa-rotate-right"></i>

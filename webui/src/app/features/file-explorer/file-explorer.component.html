@@ -1,9 +1,9 @@
-<div id="fileView">
+<div class="file-explorer-view">
   <div class="toolbar" id="toolbar">
-    @if (state.clipboardItems.length > 0) {
+    @if (state.clipboardItems().length > 0) {
       <button class="btn-interactive" type="button" disabled>
         <i class="fas fa-clipboard"></i>
-        <span>{{ state.clipboardItems.length }} item(s)</span>
+        <span>{{ state.clipboardItems().length }} item(s)</span>
       </button>
       <button class="btn-interactive" type="button" (click)="pasteClipboard()">
         <i class="fas fa-paste"></i>
@@ -23,19 +23,19 @@
         <i class="fas fa-arrow-left"></i>
         <span>Up</span>
       </button>
-      <button class="btn-interactive" type="button" (click)="loadDirectory(state.currentPath)">
+      <button class="btn-interactive" type="button" (click)="loadDirectory(state.currentPath())">
         <i class="fas fa-rotate-right"></i>
         <span>Refresh</span>
       </button>
 
       @if (isMobile()) {
-        @if (state.selectedItems.length === 0) {
+        @if (state.selectedItems().length === 0) {
           <button class="btn-interactive" type="button" (click)="uploadFiles()">
             <i class="fas fa-upload"></i>
             <span>Upload</span>
           </button>
         }
-        @if (state.selectedItems.length > 0) {
+        @if (state.selectedItems().length > 0) {
           <button class="btn-interactive" type="button" (click)="startMove()">
             <i class="fas fa-arrows-alt"></i>
             <span>Move</span>
@@ -51,7 +51,7 @@
           </button>
           @if (overflowMenuOpen()) {
             <div class="overflow-menu-content">
-              @for (item of overflowMenuItems(); track item.label) {
+              @for (item of overflowMenuItems(); track $index) {
                 <div class="overflow-menu-item" (click)="runOverflowAction(item)">
                   @if (item.checked !== undefined) {
                     <input type="checkbox" [checked]="item.checked" />
@@ -65,7 +65,7 @@
           }
         </div>
       } @else {
-        @if (state.selectedItems.length === 0) {
+        @if (state.selectedItems().length === 0) {
           <button class="btn-interactive" type="button" (click)="uploadFiles()">
             <i class="fas fa-upload"></i>
             <span>Upload</span>
@@ -81,7 +81,7 @@
           </button>
         }
 
-        @if (state.selectedItems.length > 0) {
+        @if (state.selectedItems().length > 0) {
           <button class="btn-interactive" type="button" (click)="downloadSelected()">
             <i class="fas fa-download"></i>
             <span>Download</span>
@@ -92,7 +92,7 @@
           </button>
         }
 
-        @if (state.selectedItems.length === 1) {
+        @if (state.selectedItems().length === 1) {
           <button class="btn-interactive" type="button" (click)="renameSelected()">
             <i class="fas fa-i-cursor"></i>
             <span>Rename</span>
@@ -104,7 +104,7 @@
           <span>New Folder</span>
         </button>
 
-        @if (state.selectedItems.length <= 1) {
+        @if (state.selectedItems().length <= 1) {
           <button class="btn-interactive" type="button" (click)="showProperties()">
             <i class="fas fa-circle-info"></i>
             <span>Properties</span>
@@ -114,7 +114,7 @@
         <label class="show-hidden-toggle">
           <input
             type="checkbox"
-            [checked]="state.showHidden"
+            [checked]="state.showHidden()"
             (change)="toggleShowHidden()"
           />
           <span>Show hidden</span>
@@ -124,19 +124,19 @@
   </div>
 
   <div class="file-list" id="fileList">
-    @for (file of visibleFiles; track file.path) {
+    @for (file of visibleFiles; track file.path + ':' + $index) {
       <div
         class="file-item"
         [class.highlight-folder]="shouldHighlightFolder(file)"
         [class.hidden-file]="file.isHidden"
         [class.protected-file]="file.isProtected"
         [title]="shouldHighlightFolder(file) ? 'Important folder' : ''"
-        [class.selected]="state.selectedItems.includes(file)"
+        [class.selected]="isSelected(file)"
         (click)="!isMobile() && !file.isProtected && onDesktopClick($event, file)"
         (dblclick)="!isMobile() && !file.isProtected && onDesktopDoubleClick(file)"
         appLongPress
-        (longPress)="isMobile() && !file.isProtected && onMobileLongPress(file, $event)"
-        (shortPress)="isMobile() && !file.isProtected && onMobileShortPress(file, $event)"
+        (longPress)="isMobile() && !file.isProtected && onMobileLongPress(file)"
+        (shortPress)="isMobile() && !file.isProtected && onMobileShortPress(file)"
       >
         <i [class]="getFileIconClass(file)"></i>
         <div class="file-name">{{ truncateString(getFileName(file), 50) }}</div>

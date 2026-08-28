@@ -60,7 +60,7 @@ header {
   font-size: 16px;
 }
 
-#loginView {
+.login-view {
   height: calc(100vh - 48px);
   display: flex;
   justify-content: center;
@@ -117,10 +117,6 @@ header {
 }
 
 /* ---------- File list ---------- */
-#fileView {
-  display: none;
-}
-
 .file-list {
   padding: 12px;
   display: grid;

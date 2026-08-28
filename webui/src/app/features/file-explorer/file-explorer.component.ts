@@ -82,20 +82,31 @@ export class FileExplorerComponent implements OnInit {
   }
 
   get visibleFiles(): FileSystemObject[] {
-    return this.state.dirContent.filter((file) => this.state.showHidden || !file.isHidden);
+    const seen = new Set<string>();
+    return this.state
+      .dirContent()
+      .filter((file) => {
+        if (seen.has(file.path)) {
+          return false;
+        }
+        seen.add(file.path);
+        return true;
+      })
+      .filter((file) => this.state.showHidden() || !file.isHidden);
   }
 
   get parentPath(): string | null {
-    return getParentPath(this.state.currentPath);
+    return getParentPath(this.state.currentPath());
   }
 
   get propertiesTarget(): FileSystemObject | null {
-    if (this.state.selectedItems.length === 1) {
-      return this.state.selectedItems[0];
+    const selectedItems = this.state.selectedItems();
+    if (selectedItems.length === 1) {
+      return selectedItems[0];
     }
 
-    if (this.state.selectedItems.length === 0) {
-      return this.state.selectedDir;
+    if (selectedItems.length === 0) {
+      return this.state.selectedDir();
     }
 
     return null;
@@ -107,11 +118,11 @@ export class FileExplorerComponent implements OnInit {
 
       try {
         const data = await this.fileSystemService.listDirectory(path);
-        this.state.selectedDir = data.selectedDir;
-        this.state.currentPath = data.selectedDir.path;
-        this.state.dirContent = data.dirContent;
-        this.navigationState.setBreadcrumb(this.state.currentPath);
-        await this.driveState.refresh(this.state.currentPath);
+        this.state.selectedDir.set(data.selectedDir);
+        this.state.currentPath.set(data.selectedDir.path);
+        this.state.dirContent.set(data.dirContent);
+        this.navigationState.setBreadcrumb(data.selectedDir.path);
+        await this.driveState.refresh(data.selectedDir.path);
       } catch (error) {
         this.feedbackService.showError(this.extractError(error, 'Failed to load directory'));
         setTimeout(() => {
@@ -125,20 +136,23 @@ export class FileExplorerComponent implements OnInit {
     void this.loadDirectory(path);
   }
 
-  toggleSelect(file: FileSystemObject, element: HTMLElement): void {
-    const index = this.state.selectedItems.indexOf(file);
+  isSelected(file: FileSystemObject): boolean {
+    return this.state.selectedItems().some((item) => item.path === file.path);
+  }
+
+  toggleSelect(file: FileSystemObject): void {
+    const items = this.state.selectedItems();
+    const index = items.findIndex((item) => item.path === file.path);
     if (index >= 0) {
-      this.state.selectedItems.splice(index, 1);
-      element.classList.remove('selected');
+      this.state.selectedItems.set(items.filter((_, i) => i !== index));
     } else {
-      this.state.selectedItems.push(file);
-      element.classList.add('selected');
+      this.state.selectedItems.set([...items, file]);
     }
   }
 
   onDesktopClick(event: MouseEvent, file: FileSystemObject): void {
-    const element = event.currentTarget as HTMLElement;
-    this.toggleSelect(file, element);
+    event.preventDefault();
+    this.toggleSelect(file);
   }
 
   onDesktopDoubleClick(file: FileSystemObject): void {
@@ -152,13 +166,12 @@ export class FileExplorerComponent implements OnInit {
     }
   }
 
-  onMobileLongPress(file: FileSystemObject, element: HTMLElement): void {
-    this.toggleSelect(file, element);
+  onMobileLongPress(file: FileSystemObject): void {
+    this.toggleSelect(file);
   }
 
-  onMobileShortPress(file: FileSystemObject, element: HTMLElement): void {
-
-    if (this.state.selectedItems.length === 0) {
+  onMobileShortPress(file: FileSystemObject): void {
+    if (this.state.selectedItems().length === 0) {
       if (file.isDir) {
         void this.loadDirectory(file.path);
       } else if (file.type === 'image' || file.type === 'video') {
@@ -167,7 +180,7 @@ export class FileExplorerComponent implements OnInit {
       return;
     }
 
-    this.toggleSelect(file, element);
+    this.toggleSelect(file);
   }
 
   openPreview(file: FileSystemObject): void {
@@ -186,10 +199,10 @@ export class FileExplorerComponent implements OnInit {
       return;
     }
 
-    const previousSelection = [...this.state.selectedItems];
-    this.state.selectedItems = [file];
+    const previousSelection = [...this.state.selectedItems()];
+    this.state.selectedItems.set([file]);
     await this.downloadSelected();
-    this.state.selectedItems = previousSelection;
+    this.state.selectedItems.set(previousSelection);
   }
 
   showProperties(): void {
@@ -204,14 +217,14 @@ export class FileExplorerComponent implements OnInit {
   }
 
   startCopy(): void {
-    this.state.clipboardItems = [...this.state.selectedItems];
-    this.state.clipboardMode = 'copy';
+    this.state.clipboardItems.set([...this.state.selectedItems()]);
+    this.state.clipboardMode.set('copy');
     this.state.clearSelection();
   }
 
   startMove(): void {
-    this.state.clipboardItems = [...this.state.selectedItems];
-    this.state.clipboardMode = 'move';
+    this.state.clipboardItems.set([...this.state.selectedItems()]);
+    this.state.clipboardMode.set('move');
     this.state.clearSelection();
   }
 
@@ -220,19 +233,22 @@ export class FileExplorerComponent implements OnInit {
   }
 
   async pasteClipboard(overwrite = false): Promise<void> {
-    if (!this.state.clipboardItems.length || !this.state.clipboardMode || !this.state.currentPath) {
+    const clipboardItems = this.state.clipboardItems();
+    const clipboardMode = this.state.clipboardMode();
+    const currentPath = this.state.currentPath();
+    if (!clipboardItems.length || !clipboardMode || !currentPath) {
       return;
     }
 
     try {
       await this.fileSystemService.pasteItems(
-        this.state.clipboardMode,
-        this.state.currentPath,
-        this.state.clipboardItems.map((item) => item.path),
+        clipboardMode,
+        currentPath,
+        clipboardItems.map((item) => item.path),
         overwrite
       );
       this.clearClipboard();
-      await this.loadDirectory(this.state.currentPath);
+      await this.loadDirectory(currentPath);
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         const files = (error.payload as PasteConflictResponse | undefined)?.files ?? [];
@@ -250,18 +266,19 @@ export class FileExplorerComponent implements OnInit {
   }
 
   async deleteSelected(): Promise<void> {
-    if (!this.state.selectedItems.length) {
+    const selectedItems = this.state.selectedItems();
+    if (!selectedItems.length) {
       return;
     }
 
-    if (!confirm(`Delete ${this.state.selectedItems.length} item(s)?`)) {
+    if (!confirm(`Delete ${selectedItems.length} item(s)?`)) {
       return;
     }
 
     await this.loadingService.withLoading(async () => {
       try {
-        await this.fileSystemService.deleteItems(this.state.selectedItems.map((item) => item.path));
-        await this.loadDirectory(this.state.currentPath);
+        await this.fileSystemService.deleteItems(selectedItems.map((item) => item.path));
+        await this.loadDirectory(this.state.currentPath());
       } catch (error) {
         this.feedbackService.showError(this.extractError(error, 'Delete failed'));
       }
@@ -269,7 +286,7 @@ export class FileExplorerComponent implements OnInit {
   }
 
   async renameSelected(): Promise<void> {
-    const item = this.state.selectedItems[0];
+    const item = this.state.selectedItems()[0];
     if (!item) {
       return;
     }
@@ -281,7 +298,7 @@ export class FileExplorerComponent implements OnInit {
 
     try {
       await this.fileSystemService.renameItem(item.path, newName);
-      await this.loadDirectory(this.state.currentPath);
+      await this.loadDirectory(this.state.currentPath());
     } catch (error) {
       this.feedbackService.showError(this.extractError(error, 'Rename failed'));
     }
@@ -289,15 +306,16 @@ export class FileExplorerComponent implements OnInit {
 
   async createNewFolder(): Promise<void> {
     const folderName = prompt('Enter folder name:');
-    if (!folderName || !this.state.currentPath) {
+    const currentPath = this.state.currentPath();
+    if (!folderName || !currentPath) {
       return;
     }
 
-    const targetPath = `${this.state.currentPath}/${folderName}`;
+    const targetPath = `${currentPath}/${folderName}`;
 
     try {
       await this.fileSystemService.createDirectory(targetPath);
-      await this.loadDirectory(this.state.currentPath);
+      await this.loadDirectory(currentPath);
     } catch (error) {
       this.feedbackService.showError(this.extractError(error, 'Failed to create folder'));
     }
@@ -309,7 +327,8 @@ export class FileExplorerComponent implements OnInit {
     input.multiple = true;
 
     input.onchange = async () => {
-      if (!input.files?.length || !this.state.currentPath) {
+      const currentPath = this.state.currentPath();
+      if (!input.files?.length || !currentPath) {
         return;
       }
 
@@ -318,7 +337,7 @@ export class FileExplorerComponent implements OnInit {
 
       for (const file of Array.from(input.files)) {
         try {
-          await this.uploadService.uploadFile(this.state.currentPath!, file, (percent) => {
+          await this.uploadService.uploadFile(currentPath, file, (percent) => {
             this.uploadProgress.set(percent);
           });
         } catch (error) {
@@ -328,23 +347,23 @@ export class FileExplorerComponent implements OnInit {
       }
 
       this.uploadVisible.set(false);
-      await this.loadDirectory(this.state.currentPath);
+      await this.loadDirectory(currentPath);
     };
 
     input.click();
   }
 
   async downloadSelected(): Promise<void> {
-    if (!this.state.selectedItems.length) {
+    const selectedItems = this.state.selectedItems();
+    if (!selectedItems.length) {
       return;
     }
 
-    const paths = this.state.selectedItems.map((item) => item.path);
+    const paths = selectedItems.map((item) => item.path);
 
     try {
       const blob = await this.uploadService.downloadItems(paths);
-      const filename =
-        paths.length === 1 ? getFileName(this.state.selectedItems[0]) : 'download.zip';
+      const filename = paths.length === 1 ? getFileName(selectedItems[0]) : 'download.zip';
       this.uploadService.triggerDownload(blob, filename);
     } catch (error) {
       this.feedbackService.showError(this.extractError(error, 'Download failed'));
@@ -352,8 +371,7 @@ export class FileExplorerComponent implements OnInit {
   }
 
   toggleShowHidden(): void {
-    this.state.showHidden = !this.state.showHidden;
-    void this.loadDirectory(this.state.currentPath);
+    this.state.showHidden.update((value) => !value);
   }
 
   openOverflowMenu(items: OverflowMenuItem[]): void {
@@ -371,7 +389,7 @@ export class FileExplorerComponent implements OnInit {
   }
 
   buildOverflowMenu(): OverflowMenuItem[] {
-    const selectionCount = this.state.selectedItems.length;
+    const selectionCount = this.state.selectedItems().length;
     const items: OverflowMenuItem[] = [];
 
     if (selectionCount === 0) {
@@ -389,7 +407,7 @@ export class FileExplorerComponent implements OnInit {
 
     items.push({
       label: 'Show hidden',
-      checked: this.state.showHidden,
+      checked: this.state.showHidden(),
       action: () => this.toggleShowHidden(),
     });
 

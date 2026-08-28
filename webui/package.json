@@ -4,6 +4,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve --proxy-config proxy.conf.json",
+    "prebuild": "find ../defaults/py_modules/webui -mindepth 1 ! -name '.gitkeep' -exec rm -rf {} +",
     "build": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"

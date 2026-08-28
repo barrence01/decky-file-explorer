@@ -1,11 +1,10 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import {
   ClipboardMode,
   DirectoryListResponse,
   FileSystemObject,
-  PasteConflictResponse,
 } from '../models/file-system.model';
 import { ApiError } from '../models/api-error.model';
 
@@ -82,21 +81,21 @@ export class FileSystemService {
 
 @Injectable({ providedIn: 'root' })
 export class FileExplorerStateService {
-  currentPath: string | null = null;
-  selectedDir: FileSystemObject | null = null;
-  dirContent: FileSystemObject[] = [];
-  selectedItems: FileSystemObject[] = [];
-  clipboardItems: FileSystemObject[] = [];
-  clipboardMode: ClipboardMode | null = null;
-  showHidden = false;
+  readonly currentPath = signal<string | null>(null);
+  readonly selectedDir = signal<FileSystemObject | null>(null);
+  readonly dirContent = signal<FileSystemObject[]>([]);
+  readonly selectedItems = signal<FileSystemObject[]>([]);
+  readonly clipboardItems = signal<FileSystemObject[]>([]);
+  readonly clipboardMode = signal<ClipboardMode | null>(null);
+  readonly showHidden = signal(false);
 
   clearClipboard(): void {
-    this.clipboardItems = [];
-    this.clipboardMode = null;
-    this.selectedItems = [];
+    this.clipboardItems.set([]);
+    this.clipboardMode.set(null);
+    this.selectedItems.set([]);
   }
 
   clearSelection(): void {
-    this.selectedItems = [];
+    this.selectedItems.set([]);
   }
 }

@@ -8,7 +8,7 @@ import { AuthService } from '../../../core/services/auth.service';
   standalone: true,
   imports: [FormsModule],
   template: `
-    <div id="loginView">
+    <div class="login-view">
       <div class="login-box">
         <h2>Login</h2>
         <input type="text" [(ngModel)]="username" placeholder="Login" />
