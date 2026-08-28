@@ -2,6 +2,7 @@ import {
   Component,
   ElementRef,
   Input,
+  OnDestroy,
   ViewChild,
   signal,
 } from '@angular/core';
@@ -32,16 +33,42 @@ import {
       @if (loadError()) {
         <div class="image-viewer__error">Failed to load image</div>
       }
-      <div class="image-viewer__controls">
-        <button type="button" (click)="zoomOut()"><i class="fas fa-minus"></i></button>
-        <button type="button" (click)="resetView()"><i class="fas fa-compress"></i></button>
-        <button type="button" (click)="zoomIn()"><i class="fas fa-plus"></i></button>
+      <div
+        class="image-viewer__controls"
+        (pointerdown)="$event.stopPropagation()"
+        (click)="$event.stopPropagation()"
+      >
+        <button type="button" title="Zoom out" (click)="zoomOut()">
+          <i class="fas fa-minus"></i>
+        </button>
+        <button type="button" title="Reset view" (click)="resetView()">
+          <i class="fas fa-compress"></i>
+        </button>
+        <button type="button" title="Zoom in" (click)="zoomIn()">
+          <i class="fas fa-plus"></i>
+        </button>
+        <button type="button" title="Fullscreen" (click)="toggleFullscreen()">
+          <i class="fas" [class.fa-expand]="!isFullscreen()" [class.fa-compress]="isFullscreen()"></i>
+        </button>
       </div>
     </div>
   `,
   styles: `
+    :host {
+      display: flex;
+      flex: 1 1 auto;
+      align-self: stretch;
+      min-width: 0;
+      min-height: 0;
+      width: 100%;
+      height: 100%;
+    }
+
     .image-viewer {
       position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       width: 100%;
       height: 100%;
       overflow: hidden;
@@ -54,8 +81,10 @@ import {
     }
 
     .image-viewer__media {
+      display: block;
       max-width: 100%;
       max-height: 100%;
+      object-fit: contain;
       transform-origin: center center;
       user-select: none;
       pointer-events: none;
@@ -80,6 +109,8 @@ import {
       background: rgba(0, 0, 0, 0.6);
       padding: 8px;
       border-radius: 999px;
+      z-index: 2;
+      pointer-events: auto;
     }
 
     .image-viewer__controls button {
@@ -93,7 +124,7 @@ import {
     }
   `,
 })
-export class ImageViewerComponent {
+export class ImageViewerComponent implements OnDestroy {
   @Input({ required: true }) src!: string;
   @Input() alt = '';
 
@@ -101,6 +132,7 @@ export class ImageViewerComponent {
 
   readonly loadError = signal(false);
   readonly transform = signal('translate(0px, 0px) scale(1)');
+  readonly isFullscreen = signal(false);
 
   private scale = 1;
   private translateX = 0;
@@ -109,6 +141,17 @@ export class ImageViewerComponent {
   private panStart: { x: number; y: number; tx: number; ty: number } | null = null;
   private pinchStartDistance = 0;
   private pinchStartScale = 1;
+  private readonly onFullscreenChange = (): void => {
+    this.isFullscreen.set(document.fullscreenElement === this.containerRef?.nativeElement);
+  };
+
+  constructor() {
+    document.addEventListener('fullscreenchange', this.onFullscreenChange);
+  }
+
+  ngOnDestroy(): void {
+    document.removeEventListener('fullscreenchange', this.onFullscreenChange);
+  }
 
   onImageLoad(): void {
     this.loadError.set(false);
@@ -130,6 +173,15 @@ export class ImageViewerComponent {
     this.updateTransform();
   }
 
+  toggleFullscreen(): void {
+    const container = this.containerRef.nativeElement;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    void container.requestFullscreen();
+  }
+
   onWheel(event: WheelEvent): void {
     event.preventDefault();
     const delta = event.deltaY < 0 ? 1.1 : 0.9;
@@ -137,6 +189,10 @@ export class ImageViewerComponent {
   }
 
   onPointerDown(event: PointerEvent): void {
+    if ((event.target as HTMLElement).closest('.image-viewer__controls')) {
+      return;
+    }
+
     this.containerRef.nativeElement.setPointerCapture(event.pointerId);
     this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 

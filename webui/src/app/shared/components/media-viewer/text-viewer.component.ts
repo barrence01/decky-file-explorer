@@ -42,18 +42,30 @@ import { ApiError } from '../../../core/models/api-error.model';
     </div>
   `,
   styles: `
+    :host {
+      display: flex;
+      flex: 1 1 auto;
+      align-self: stretch;
+      min-width: 0;
+      min-height: 0;
+      width: 100%;
+      height: 100%;
+    }
+
     .text-viewer {
-      flex: 1;
+      flex: 1 1 auto;
       min-height: 0;
       display: flex;
       flex-direction: column;
       width: 100%;
+      height: 100%;
       background: #111827;
     }
 
     .text-viewer__editor {
-      flex: 1;
+      flex: 1 1 auto;
       min-height: 0;
+      height: 0;
       width: 100%;
       box-sizing: border-box;
       border: none;
@@ -62,7 +74,7 @@ import { ApiError } from '../../../core/models/api-error.model';
       background: #111827;
       color: #f9fafb;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 14px;
+      font-size: 16px;
       line-height: 1.5;
     }
 

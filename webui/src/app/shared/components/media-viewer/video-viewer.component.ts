@@ -1,4 +1,4 @@
-import { Component, ElementRef, Input, ViewChild, signal } from '@angular/core';
+import { Component, ElementRef, Input, OnDestroy, ViewChild, signal } from '@angular/core';
 
 @Component({
   selector: 'app-video-viewer',
@@ -21,9 +21,13 @@ import { Component, ElementRef, Input, ViewChild, signal } from '@angular/core';
       @if (loadError()) {
         <div class="video-viewer__overlay video-viewer__overlay--error">Failed to load video</div>
       }
-      <div class="video-viewer__controls">
+      <div
+        class="video-viewer__controls"
+        (pointerdown)="$event.stopPropagation()"
+        (click)="$event.stopPropagation()"
+      >
         <button type="button" (click)="toggleFullscreen()">
-          <i class="fas fa-expand"></i>
+          <i class="fas" [class.fa-expand]="!isFullscreen()" [class.fa-compress]="isFullscreen()"></i>
           Fullscreen
         </button>
       </div>
@@ -65,6 +69,8 @@ import { Component, ElementRef, Input, ViewChild, signal } from '@angular/core';
       position: absolute;
       top: 12px;
       right: 12px;
+      z-index: 2;
+      pointer-events: auto;
     }
 
     .video-viewer__controls button {
@@ -80,7 +86,7 @@ import { Component, ElementRef, Input, ViewChild, signal } from '@angular/core';
     }
   `,
 })
-export class VideoViewerComponent {
+export class VideoViewerComponent implements OnDestroy {
   @Input({ required: true }) src!: string;
 
   @ViewChild('container') containerRef!: ElementRef<HTMLDivElement>;
@@ -88,6 +94,19 @@ export class VideoViewerComponent {
 
   readonly loading = signal(true);
   readonly loadError = signal(false);
+  readonly isFullscreen = signal(false);
+
+  private readonly onFullscreenChange = (): void => {
+    this.isFullscreen.set(document.fullscreenElement === this.containerRef?.nativeElement);
+  };
+
+  constructor() {
+    document.addEventListener('fullscreenchange', this.onFullscreenChange);
+  }
+
+  ngOnDestroy(): void {
+    document.removeEventListener('fullscreenchange', this.onFullscreenChange);
+  }
 
   onError(): void {
     this.loading.set(false);

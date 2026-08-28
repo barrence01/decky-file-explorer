@@ -35,7 +35,10 @@ export type PreviewMode = 'file' | 'clip';
               <i class="fas fa-times"></i>
             </button>
           </header>
-          <div class="media-viewer-body">
+          <div
+            class="media-viewer-body"
+            [class.media-viewer-body--text]="mode === 'file' && file?.type === 'text'"
+          >
             @if (mode === 'file' && file) {
               @if (file.type === 'image') {
                 <app-image-viewer [src]="fileUrl" [alt]="title" />
@@ -132,10 +135,15 @@ export type PreviewMode = 'file' | 'clip';
     }
 
     .media-viewer-body {
-      flex: 1;
+      flex: 1 1 auto;
       min-height: 0;
       display: flex;
+      align-items: stretch;
       background: #000;
+    }
+
+    .media-viewer-body--text {
+      overflow: hidden;
     }
 
     .media-viewer-close {
