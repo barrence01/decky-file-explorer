@@ -31,8 +31,11 @@ There are several ways to install this plugin:
 
 **Requirements:**
 - Node.js
-- Docker
+- Podman or Docker (Podman is preferred when both are installed)
 
+## Development
+
+For running tests, building from source, and viewing logs, see [BUILD.md](BUILD.md).
 
 # Main menu of the plugin
 <img width="20%" height="20%" alt="HOME_MENU" src="https://github.com/user-attachments/assets/3efce970-82f7-4af6-a999-493f687787b4" />

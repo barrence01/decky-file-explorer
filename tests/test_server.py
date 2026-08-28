@@ -1,11 +1,14 @@
 import pytest
 import pytest_asyncio
+import asyncio
+import time
 from pathlib import Path
 from aiohttp import FormData
 from aiohttp.test_utils import TestClient
 
 from filesystem import FileSystemService
-from server import WebServer, AUTH_COOKIE
+import server
+from server import WebServer, AUTH_COOKIE, _sync_list_dir_payload
 
 # ------------------------
 # FIXTURES
@@ -112,6 +115,14 @@ async def test_login_missing_fields(client):
     assert res.status == 400
 
 
+@pytest.mark.asyncio
+async def test_spa_routes_serve_index(client):
+    for route in ("/files", "/login", "/recordings"):
+        res = await client.get(route)
+        assert res.status == 200
+        assert await res.text() == "<html>OK</html>"
+
+
 # ------------------------
 # DIRECTORY LIST
 # ------------------------
@@ -132,6 +143,10 @@ async def test_list_dir(client, fs):
     data = await res.json()
 
     assert data["selectedDir"]["isDir"] is True
+    assert "parentPath" in data["selectedDir"]
+    assert "canNavigateUp" in data["selectedDir"]
+    assert "breadcrumbs" in data
+    assert isinstance(data["breadcrumbs"], list)
     assert len(data["dirContent"]) == 1
 
 
@@ -144,7 +159,9 @@ async def test_list_dir_invalid(client):
         json={"path": "missing"},
     )
 
-    assert res.status == 400
+    assert res.status == 404
+    data = await res.json()
+    assert data["code"] == "not_found"
 
 
 # ------------------------
@@ -175,6 +192,20 @@ async def test_delete_without_paths(client):
 
     res = await client.post("/api/dir/delete", json={})
     assert res.status == 400
+
+@pytest.mark.asyncio
+async def test_create_dir_with_parent_and_name(client, fs):
+    await login(client)
+
+    fs.create_dir("parent")
+
+    res = await client.post(
+        "/api/dir/create",
+        json={"parentPath": str(fs.base_dir / "parent"), "name": "child"},
+    )
+    assert res.status == 200
+    assert (fs.base_dir / "parent" / "child").exists()
+
 
 @pytest.mark.asyncio
 async def test_create_dir_already_exists(client, fs):
@@ -338,6 +369,138 @@ async def test_upload_missing_file(client, fs):
 
     res = await client.post("/api/dir/upload", data=data)
     assert res.status == 415
+
+
+@pytest.mark.asyncio
+async def test_upload_conflict_returns_suggested_name(client, fs):
+    await login(client)
+
+    fs.create_dir("uploads")
+    fs.create_file("uploads/file.txt", b"existing")
+
+    data = FormData()
+    data.add_field("path", "uploads")
+    data.add_field(
+        "file",
+        b"new content",
+        filename="file.txt",
+        content_type="text/plain",
+    )
+
+    res = await client.post("/api/dir/upload", data=data)
+    payload = await res.json()
+
+    assert res.status == 409
+    assert payload["error"] == "conflict"
+    assert payload["files"] == ["file.txt"]
+    assert payload["suggestedName"] == "file (1).txt"
+
+
+@pytest.mark.asyncio
+async def test_upload_overwrite_existing_file(client, fs):
+    await login(client)
+
+    fs.create_dir("uploads")
+    fs.create_file("uploads/file.txt", b"existing")
+
+    data = FormData()
+    data.add_field("path", "uploads")
+    data.add_field("overwrite", "true")
+    data.add_field(
+        "file",
+        b"replaced",
+        filename="file.txt",
+        content_type="text/plain",
+    )
+
+    res = await client.post("/api/dir/upload", data=data)
+
+    assert res.status == 200
+    assert (fs.base_dir / "uploads/file.txt").read_bytes() == b"replaced"
+
+
+@pytest.mark.asyncio
+async def test_upload_with_alternate_filename(client, fs):
+    await login(client)
+
+    fs.create_dir("uploads")
+    fs.create_file("uploads/file.txt", b"existing")
+
+    data = FormData()
+    data.add_field("path", "uploads")
+    data.add_field("filename", "file (1).txt")
+    data.add_field(
+        "file",
+        b"copy",
+        filename="file.txt",
+        content_type="text/plain",
+    )
+
+    res = await client.post("/api/dir/upload", data=data)
+
+    assert res.status == 200
+    assert (fs.base_dir / "uploads/file.txt").read_bytes() == b"existing"
+    assert (fs.base_dir / "uploads/file (1).txt").read_bytes() == b"copy"
+
+
+# ------------------------
+# TEXT FILE
+# ------------------------
+
+@pytest.mark.asyncio
+async def test_read_text_file(client, fs):
+    await login(client)
+
+    fs.create_file("notes.txt", b"hello world")
+
+    res = await client.get("/api/file/text?path=notes.txt")
+    payload = await res.json()
+
+    assert res.status == 200
+    assert payload["content"] == "hello world"
+    assert payload["size"] == 11
+    assert payload["isWritable"] is True
+
+
+@pytest.mark.asyncio
+async def test_read_text_file_too_large(client, fs):
+    await login(client)
+
+    fs.create_file("big.txt", b"x" * 600_000)
+
+    res = await client.get("/api/file/text?path=big.txt")
+
+    assert res.status == 413
+
+
+@pytest.mark.asyncio
+async def test_write_text_file(client, fs):
+    await login(client)
+
+    fs.create_file("notes.txt", b"old")
+
+    res = await client.put(
+        "/api/file/text",
+        json={"path": "notes.txt", "content": "updated"},
+    )
+
+    assert res.status == 200
+    assert (fs.base_dir / "notes.txt").read_text(encoding="utf-8") == "updated"
+
+
+@pytest.mark.asyncio
+async def test_write_text_file_forbidden(client, fs, monkeypatch):
+    await login(client)
+
+    fs.create_file("notes.txt", b"old")
+    monkeypatch.setattr("filesystem.os.access", lambda path, mode: False)
+
+    res = await client.put(
+        "/api/file/text",
+        json={"path": "notes.txt", "content": "updated"},
+    )
+
+    assert res.status == 403
 
 
 # ------------------------
@@ -515,6 +678,47 @@ async def test_assemble_clip_invalid_path(client):
     assert res.status == 400
 
 @pytest.mark.asyncio
+async def test_rename_blocks_path_injection(client, fs):
+    await login(client)
+
+    fs.create_file("file.txt", b"x")
+
+    res = await client.post(
+        "/api/file/rename",
+        json={"path": "file.txt", "newName": "../escape.txt"},
+    )
+
+    assert res.status == 400
+    data = await res.json()
+    assert data["code"] == "invalid_name"
+    assert (fs.base_dir / "file.txt").exists()
+    assert not (fs.base_dir / "escape.txt").exists()
+
+
+@pytest.mark.asyncio
+async def test_list_dir_access_denied_payload(client, fs, monkeypatch):
+    await login(client)
+
+    fs.create_dir("locked")
+
+    def raise_permission(_self):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr("pathlib.Path.iterdir", raise_permission)
+
+    res = await client.post(
+        "/api/dir/list",
+        json={"path": "locked"},
+    )
+
+    assert res.status == 403
+    data = await res.json()
+    assert data["code"] == "access_denied"
+    assert data["canNavigateUp"] is True
+    assert data["parentPath"] is not None
+
+
+@pytest.mark.asyncio
 async def test_assemble_clip_conflict(client, monkeypatch, tmp_path):
     await login(client)
 
@@ -534,3 +738,151 @@ async def test_assemble_clip_conflict(client, monkeypatch, tmp_path):
     )
 
     assert res.status == 409
+
+
+# ------------------------
+# REQUEST TIMEOUT
+# ------------------------
+
+@pytest.mark.asyncio
+async def test_request_timeout_returns_504(aiohttp_client, monkeypatch):
+    import asyncio
+    from aiohttp import web
+
+    import server
+
+    monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.1)
+
+    async def slow_ping(request):
+        await asyncio.sleep(0.3)
+        return web.json_response({"status": "ok"})
+
+    app = web.Application(middlewares=[server.request_timeout_middleware])
+    app.router.add_get("/api/ping", slow_ping)
+
+    client = await aiohttp_client(app)
+    res = await client.get("/api/ping")
+
+    assert res.status == 504
+    data = await res.json()
+    assert data["error"] == "Request timed out"
+
+
+@pytest.mark.asyncio
+async def test_request_timeout_exempt_download(aiohttp_client, monkeypatch):
+    import asyncio
+    from aiohttp import web
+
+    import server
+
+    monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.1)
+
+    async def slow_download(request):
+        await asyncio.sleep(0.3)
+        return web.json_response({"status": "ok"})
+
+    app = web.Application(middlewares=[server.request_timeout_middleware])
+    app.router.add_post("/api/dir/download", slow_download)
+
+    client = await aiohttp_client(app)
+    res = await client.post("/api/dir/download", json={"paths": ["file.txt"]})
+
+    assert res.status == 200
+    assert (await res.json())["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_request_timeout_exempt_upload(aiohttp_client, monkeypatch):
+    import asyncio
+    from aiohttp import web
+
+    import server
+
+    monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.1)
+
+    async def slow_upload(request):
+        await asyncio.sleep(0.3)
+        return web.json_response({"status": "ok"})
+
+    app = web.Application(middlewares=[server.request_timeout_middleware])
+    app.router.add_post("/api/dir/upload", slow_upload)
+
+    client = await aiohttp_client(app)
+    res = await client.post("/api/dir/upload")
+
+    assert res.status == 200
+
+
+@pytest.mark.asyncio
+async def test_request_timeout_exempt_view_file(aiohttp_client, monkeypatch):
+    import asyncio
+    from aiohttp import web
+
+    import server
+
+    monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.1)
+
+    async def slow_view(request):
+        await asyncio.sleep(0.3)
+        return web.Response(body=b"content")
+
+    app = web.Application(middlewares=[server.request_timeout_middleware])
+    app.router.add_get("/api/file/view", slow_view)
+
+    client = await aiohttp_client(app)
+    res = await client.get("/api/file/view?path=file.txt")
+
+    assert res.status == 200
+    assert await res.read() == b"content"
+
+
+@pytest.mark.asyncio
+async def test_request_timeout_exempt_assemble_clip(aiohttp_client, monkeypatch):
+    import asyncio
+    from aiohttp import web
+
+    import server
+
+    monkeypatch.setattr(server, "REQUEST_TIMEOUT_SECONDS", 0.1)
+
+    async def slow_assemble(request):
+        await asyncio.sleep(0.3)
+        return web.json_response({"status": "ok"})
+
+    app = web.Application(middlewares=[server.request_timeout_middleware])
+    app.router.add_post("/api/steam/clips/assemble", slow_assemble)
+
+    client = await aiohttp_client(app)
+    res = await client.post("/api/steam/clips/assemble", json={"mpd": "/tmp/session.mpd"})
+
+    assert res.status == 200
+
+
+@pytest.mark.asyncio
+async def test_event_loop_not_blocked_by_slow_list_dir(client, monkeypatch):
+    await login(client)
+
+    original = _sync_list_dir_payload
+
+    def slow_list_dir_payload(fs, path):
+        time.sleep(0.5)
+        return original(fs, path)
+
+    monkeypatch.setattr(server, "_sync_list_dir_payload", slow_list_dir_payload)
+
+    list_task = asyncio.create_task(
+        client.post("/api/dir/list", json={"path": ""})
+    )
+
+    await asyncio.sleep(0.05)
+
+    started = time.monotonic()
+    ping_res = await client.get("/api/ping")
+    elapsed = time.monotonic() - started
+
+    assert ping_res.status == 200
+    assert elapsed < 0.2
+
+    list_res = await list_task
+    assert list_res.status == 200
+

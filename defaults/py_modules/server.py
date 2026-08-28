@@ -8,7 +8,25 @@ import mimetypes
 import os
 import socket
 import bcrypt
-from filesystem import FileSystemError, FileSystemService, FileAlreadyExistsError, get_all_drives, get_drive_root
+from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import quote
+from filesystem import (
+    FileSystemError,
+    FileSystemService,
+    FileAlreadyExistsError,
+    PathAccessError,
+    TEXT_FILE_MAX_BYTES,
+    get_all_drives,
+    get_drive_root,
+    iter_file_chunks,
+)
+from path_utils import (
+    build_error_context,
+    generate_unique_filename,
+    join_api_path,
+    normalize_api_path,
+    validate_path_segment,
+)
 import decky
 import gamerecording
 import subprocess
@@ -19,7 +37,7 @@ from shared_settings import get_server_settings_manager, get_credentials_manager
 settings_credentials = get_credentials_manager()
 settings_server = get_server_settings_manager()
 
-from utils import log_exceptions 
+from utils import log_exceptions, run_sync
 
 # =========================
 # Constants
@@ -51,6 +69,18 @@ PORT_FIELD = "port"
 HOST_FIELD = "host"
 SHUTDOWN_TIMEOUT_FIELD = "shutdown_timeout_seconds"
 
+REQUEST_TIMEOUT_SECONDS = 30
+
+REQUEST_TIMEOUT_EXEMPT_PATHS = frozenset({
+    "/api/dir/download",
+    "/api/dir/upload",
+    "/api/file/view",
+    "/api/steam/clips/assemble",
+})
+
+SPA_ROUTES = ("/login", "/files", "/recordings")
+
+EXECUTOR_MAX_WORKERS = 4
 
 
 # =========================
@@ -63,6 +93,21 @@ class PortAlreadyInUseError(Exception):
 # =========================
 # Middleware
 # =========================
+
+@web.middleware
+async def request_timeout_middleware(request, handler):
+    path = request.path
+    if not path.startswith("/api") or path in REQUEST_TIMEOUT_EXEMPT_PATHS:
+        return await handler(request)
+
+    try:
+        return await asyncio.wait_for(handler(request), timeout=REQUEST_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        decky.logger.warning(
+            f"Request timed out after {REQUEST_TIMEOUT_SECONDS}s: {request.method} {path}"
+        )
+        return web.json_response({"error": "Request timed out"}, status=504)
+
 
 @web.middleware
 async def activity_middleware(request, handler):
@@ -113,8 +158,9 @@ async def error_middleware(request, handler):
         )
 
     except Exception as ex:
+        decky.logger.exception("Unhandled server error")
         return web.json_response(
-            {"error": str(ex)},
+            {"error": "Internal server error"},
             status=500
         )
 
@@ -189,6 +235,76 @@ def create_ssl_context() -> ssl.SSLContext:
     )
     return context
 
+
+def format_content_disposition(filename: str, disposition: str = "attachment") -> str:
+    safe_name = filename.replace('"', "'")
+    encoded_name = quote(filename)
+    return (
+        f'{disposition}; filename="{safe_name}"; '
+        f"filename*=UTF-8''{encoded_name}"
+    )
+
+
+def filesystem_error_response(
+    fs: FileSystemService,
+    exc: Exception,
+    path: str | None = None,
+) -> web.Response:
+    if isinstance(exc, PathAccessError):
+        return web.json_response(
+            {
+                "error": str(exc),
+                "code": exc.code,
+                "parentPath": exc.parent_path,
+                "canNavigateUp": exc.can_navigate_up,
+            },
+            status=403 if exc.code in ("access_denied", "forbidden") else 404,
+        )
+
+    if isinstance(exc, FileSystemError):
+        context = build_error_context(path or fs.base_dir, fs.base_dir)
+        return web.json_response(
+            {
+                "error": str(exc),
+                "code": "forbidden",
+                "parentPath": context["parentPath"],
+                "canNavigateUp": context["canNavigateUp"],
+            },
+            status=403,
+        )
+
+    if isinstance(exc, FileNotFoundError):
+        context = build_error_context(path or fs.base_dir, fs.base_dir)
+        return web.json_response(
+            {
+                "error": str(exc),
+                "code": "not_found",
+                "parentPath": context["parentPath"],
+                "canNavigateUp": context["canNavigateUp"],
+            },
+            status=404,
+        )
+
+    if isinstance(exc, NotADirectoryError):
+        return web.json_response(
+            {
+                "error": str(exc),
+                "code": "not_directory",
+            },
+            status=400,
+        )
+
+    if isinstance(exc, ValueError):
+        return web.json_response(
+            {
+                "error": str(exc),
+                "code": "invalid_name",
+            },
+            status=400,
+        )
+
+    return web.json_response({"error": str(exc)}, status=400)
+
 def get_file_system_service() -> FileSystemService:
     server_settings = get_server_settings()
     print(server_settings.get_base_dir())
@@ -205,6 +321,118 @@ def get_videos_dir() -> Path:
     videos.mkdir(parents=True, exist_ok=True)
     return videos
 
+
+# =========================
+# Sync workers (run in thread pool)
+# =========================
+
+def _sync_list_dir_payload(fs: FileSystemService, path: str) -> dict:
+    metadata = fs.build_directory_metadata(path)
+    resolved_path = metadata["selectedDir"]["path"]
+
+    try:
+        selected_drive = normalize_api_path(get_drive_root(resolved_path))
+    except Exception:
+        selected_drive = resolved_path
+
+    items = fs.list_dir(path)
+    return {
+        **metadata,
+        "selectedDrive": selected_drive,
+        "dirContent": [obj.to_dict() for obj in items],
+    }
+
+
+def _sync_delete_paths(fs: FileSystemService, paths: list[str]) -> None:
+    for path in paths:
+        obj = fs.get_object(path)
+        if obj.isDir():
+            fs.delete_dir(path)
+        else:
+            fs.delete_file(path)
+
+
+def _sync_rename(fs: FileSystemService, path: str, new_name: str) -> None:
+    fs.rename(path, new_name)
+
+
+def _sync_paste_move(
+    fs: FileSystemService,
+    mode: str,
+    target_dir: str,
+    paths: list[str],
+    overwrite: bool,
+) -> list[str]:
+    conflicts = []
+
+    for src in paths:
+        name = Path(src).name
+        dst = join_api_path(target_dir, name)
+
+        try:
+            if mode == "copy":
+                fs.copy(src, dst, overwrite=overwrite)
+            else:
+                fs.move(src, dst, overwrite=overwrite)
+        except FileAlreadyExistsError:
+            conflicts.append(name)
+
+    return conflicts
+
+
+def _sync_create_dir(fs: FileSystemService, path: str) -> None:
+    fs.create_dir(path)
+
+
+def _sync_read_text(fs: FileSystemService, path: str, max_bytes: int) -> dict:
+    return fs.read_text(path, max_bytes=max_bytes)
+
+
+def _sync_write_text(
+    fs: FileSystemService,
+    path: str,
+    content: str,
+    max_bytes: int,
+) -> None:
+    fs.write_text(path, content, max_bytes=max_bytes)
+
+
+def _sync_list_drives(path: str | None) -> dict:
+    external_mounts = get_all_drives()
+    current_drive = os.path.expanduser("~")
+
+    if path:
+        current_drive = get_drive_root(path)
+
+    return {
+        "currentDrive": normalize_api_path(str(current_drive)),
+        "drives": [obj.to_dict() for obj in external_mounts],
+    }
+
+
+def _sync_scan_clips() -> list[dict]:
+    return gamerecording.scan_steam_recordings()
+
+
+def _sync_build_zip(fs: FileSystemService, paths: list[str]) -> bytes:
+    return fs.stream_zip(paths).read()
+
+
+def _sync_get_download_file(fs: FileSystemService, path: str) -> tuple[Path, str] | None:
+    obj = fs.get_object(path)
+    if not obj.isFile():
+        return None
+    return obj.path, obj.path.name
+
+
+def _sync_get_view_file(fs: FileSystemService, path: str) -> tuple[Path, int] | None:
+    obj = fs.get_object(path)
+    if not obj.isFile():
+        return None
+    file_path = obj.path
+    return file_path, file_path.stat().st_size
+
+
 class WebServer:
     def __init__(
         self,
@@ -217,8 +445,14 @@ class WebServer:
 
         self.host = host
         self.port = port
+        self._executor = ThreadPoolExecutor(max_workers=EXECUTOR_MAX_WORKERS)
 
-        self.app = web.Application(middlewares=[activity_middleware, error_middleware, auth_middleware])
+        self.app = web.Application(middlewares=[
+            request_timeout_middleware,
+            activity_middleware,
+            error_middleware,
+            auth_middleware,
+        ])
         self.app["server"] = self
         self.app[AUTH_TOKEN_FIELD] = set()
 
@@ -238,7 +472,9 @@ class WebServer:
 
     def _setup_routes(self):
         self.app.router.add_get("/", self.index)
-        
+        for route in SPA_ROUTES:
+            self.app.router.add_get(route, self.index)
+
         self.app.router.add_post("/api/login", self.login)
         self.app.router.add_get("/api/logoff", self.logoff)
         self.app.router.add_get("/api/login/is-logged", self.is_logged)
@@ -252,6 +488,8 @@ class WebServer:
         self.app.router.add_post("/api/dir/paste", self.paste_move)
         self.app.router.add_post("/api/dir/create", self.create_dir)
         self.app.router.add_get("/api/file/view", self.view_file)
+        self.app.router.add_get("/api/file/text", self.read_text_file)
+        self.app.router.add_put("/api/file/text", self.write_text_file)
         self.app.router.add_get("/api/steam/clips", self.list_steam_clips)
         self.app.router.add_post("/api/steam/clips/assemble", self.assemble_steam_clip)
         self.app.router.add_get("/api/steam/clips/thumbnail/{clipId}", self.get_steam_clip_thumbnail)
@@ -353,28 +591,16 @@ class WebServer:
             path = server_settings.get_base_dir()
 
         try:
-            selected_dir = self.fs.get_object(path)
-            selected_drive = get_drive_root(path)
-
-            if not selected_dir.isDir():
-                return web.json_response(
-                    {"error": "Path is not a directory"},
-                    status=400
-                )
-
-            items = self.fs.list_dir(path)
-
-            return web.json_response({
-                "selectedDir": selected_dir.to_dict(),
-                "selectedDrive":str(selected_drive),
-                "dirContent": [obj.to_dict() for obj in items]
-            })
-
-        except (FileSystemError, FileNotFoundError) as e:
-            return web.json_response(
-                {"error": str(e)},
-                status=400
+            payload = await run_sync(
+                _sync_list_dir_payload,
+                self.fs,
+                path,
+                executor=self._executor,
             )
+            return web.json_response(payload)
+
+        except (PathAccessError, FileSystemError, FileNotFoundError, NotADirectoryError) as e:
+            return filesystem_error_response(self.fs, e, path)
     
     @log_exceptions
     async def delete(self, request: web.Request):
@@ -387,13 +613,12 @@ class WebServer:
         decky.logger.warning(f"delete - deleting files {paths}")
 
         try:
-            for path in paths:
-                obj = self.fs.get_object(path)
-                if obj.isDir():
-                    self.fs.delete_dir(path)
-                else:
-                    self.fs.delete_file(path)
-
+            await run_sync(
+                _sync_delete_paths,
+                self.fs,
+                paths,
+                executor=self._executor,
+            )
             return web.json_response({"status": "ok"})
 
         except FileSystemError as e:
@@ -411,10 +636,16 @@ class WebServer:
         decky.logger.warning(f"rename - renaming file '{path}' to '{new_name}'")
 
         try:
-            self.fs.rename(path, new_name)
+            await run_sync(
+                _sync_rename,
+                self.fs,
+                path,
+                new_name,
+                executor=self._executor,
+            )
             return web.json_response({"status": "ok"})
-        except FileSystemError as e:
-            return web.json_response({"error": str(e)}, status=400)
+        except (FileSystemError, ValueError) as e:
+            return filesystem_error_response(self.fs, e, path)
     
     @log_exceptions
     async def paste_move(self, request: web.Request):
@@ -430,20 +661,15 @@ class WebServer:
             raise web.HTTPBadRequest(reason="Invalid mode")
         decky.logger.info(f"paste_move - with mode '{mode}' with overwrite_mode '{overwrite}' for '{paths}' to '{target_dir}'")
 
-        conflicts = []
-
-        for src in paths:
-            name = Path(src).name
-            dst = f"{target_dir.rstrip('/')}/{name}"
-
-            try:
-                if mode == "copy":
-                    self.fs.copy(src, dst, overwrite=overwrite)
-                else:
-                    self.fs.move(src, dst, overwrite=overwrite)
-
-            except FileAlreadyExistsError:
-                conflicts.append(name)
+        conflicts = await run_sync(
+            _sync_paste_move,
+            self.fs,
+            mode,
+            target_dir,
+            paths,
+            overwrite,
+            executor=self._executor,
+        )
 
         if conflicts and not overwrite:
             return web.json_response(
@@ -461,13 +687,25 @@ class WebServer:
         decky.logger.info("create_dir - Initiated")
         data = await request.json()
         path = data.get("path")
+        parent_path = data.get("parentPath")
+        name = data.get("name")
 
         if not path:
-            raise web.HTTPBadRequest(reason="Missing path")
+            if not parent_path or not name:
+                raise web.HTTPBadRequest(reason="Missing path")
+            try:
+                path = join_api_path(parent_path, name)
+            except ValueError as e:
+                raise web.HTTPBadRequest(reason=str(e))
         decky.logger.info(f"create_dir - Creating folder {path}")
 
         try:
-            self.fs.create_dir(path)
+            await run_sync(
+                _sync_create_dir,
+                self.fs,
+                path,
+                executor=self._executor,
+            )
             return web.json_response({"status": "ok"})
         except FileSystemError as e:
             return web.json_response({"error": str(e)}, status=400)
@@ -486,6 +724,8 @@ class WebServer:
         reader: Union[MultipartReader, BodyPartReader] = await request.multipart()
 
         target_dir = None
+        overwrite = False
+        custom_filename = None
 
         if not isinstance(reader, MultipartReader):
             decky.logger.exception(f"File upload - Invalid multipart data")
@@ -496,49 +736,112 @@ class WebServer:
 
             if part.name == "path":
                 target_dir = (await part.read()).decode().strip()
+            elif part.name == "overwrite":
+                value = (await part.read()).decode().strip().lower()
+                overwrite = value in ("true", "1", "yes")
+            elif part.name == "filename":
+                custom_filename = (await part.read()).decode().strip()
             elif part.name == "file":
-                filename = part.filename
+                return await self._handle_upload_file_part(
+                    target_dir,
+                    overwrite,
+                    custom_filename,
+                    part,
+                )
 
-                decky.logger.info(f"File upload - filename: {filename}")
-                if not target_dir:
-                    decky.logger.exception(f"File upload - Missing upload path")
-                    raise web.HTTPBadRequest(reason="Missing upload path")
+        if not target_dir:
+            decky.logger.exception(f"File upload - Missing upload path")
+            raise web.HTTPBadRequest(reason="Missing upload path")
 
-                if not filename:
-                    decky.logger.exception(f"File upload - Missing file")
-                    raise web.HTTPBadRequest(reason="Missing file")
+        decky.logger.exception(f"File upload - Missing file")
+        raise web.HTTPBadRequest(reason="Missing file")
 
-                filename = os.path.basename(filename)
-                target_path = os.path.join(target_dir, filename)
-                decky.logger.info(f"File upload - Filename: {filename} | target_path: {target_path}")
-                loop = asyncio.get_running_loop()
+    async def _handle_upload_file_part(
+        self,
+        target_dir: str | None,
+        overwrite: bool,
+        custom_filename: str | None,
+        part: aiohttp.BodyPartReader,
+    ):
+        if not target_dir:
+            decky.logger.exception(f"File upload - Missing upload path")
+            raise web.HTTPBadRequest(reason="Missing upload path")
 
-                try:
-                    stream = self.fs.open_write_stream(target_path)
-                    try:
-                        while True:
-                            chunk = await part.read_chunk(64 * 1024)
-                            if not chunk:
-                                break
+        if not part.filename:
+            decky.logger.exception(f"File upload - Missing file")
+            raise web.HTTPBadRequest(reason="Missing file")
 
-                            # Write in executor to avoid blocking event loop
-                            await loop.run_in_executor(None, stream.write, chunk)
+        original_filename = os.path.basename(part.filename)
+        filename = custom_filename or original_filename
 
-                    finally:
-                        await loop.run_in_executor(None, stream.close)
-                    return web.json_response({
-                        "status": "ok",
-                        "filename": filename
-                    })
-                except FileAlreadyExistsError:
-                    decky.logger.warning("File upload - File already exists")
-                    return web.json_response(
-                        {"error": "File already exists"},
-                        status=400
-                    )
-        return web.json_response({
-            "status": "ok"
-        })
+        try:
+            validate_path_segment(filename)
+            target_path = join_api_path(target_dir, filename)
+        except ValueError as e:
+            raise web.HTTPBadRequest(reason=str(e))
+
+        decky.logger.info(
+            f"File upload - Filename: {filename} | target_path: {target_path} | overwrite: {overwrite}"
+        )
+
+        def file_exists(relative_path: str) -> bool:
+            try:
+                return self.fs.get_object(relative_path).isFile()
+            except FileNotFoundError:
+                return False
+
+        if file_exists(target_path) and not overwrite:
+            await self._drain_upload_part(part)
+            suggested_name = generate_unique_filename(target_dir, filename, file_exists)
+            decky.logger.warning("File upload - File already exists")
+            return web.json_response(
+                {
+                    "error": "conflict",
+                    "files": [filename],
+                    "suggestedName": suggested_name,
+                },
+                status=409,
+            )
+
+        loop = asyncio.get_running_loop()
+
+        try:
+            stream = await run_sync(
+                self.fs.open_write_stream,
+                target_path,
+                overwrite=overwrite,
+                executor=self._executor,
+            )
+            try:
+                while True:
+                    chunk = await part.read_chunk(64 * 1024)
+                    if not chunk:
+                        break
+
+                    await loop.run_in_executor(self._executor, stream.write, chunk)
+
+            finally:
+                await loop.run_in_executor(self._executor, stream.close)
+            return web.json_response({
+                "status": "ok",
+                "filename": filename,
+            })
+        except FileAlreadyExistsError:
+            await self._drain_upload_part(part)
+            suggested_name = generate_unique_filename(target_dir, filename, file_exists)
+            decky.logger.warning("File upload - File already exists")
+            return web.json_response(
+                {
+                    "error": "conflict",
+                    "files": [filename],
+                    "suggestedName": suggested_name,
+                },
+                status=409,
+            )
+
+    async def _drain_upload_part(self, part: aiohttp.BodyPartReader) -> None:
+        while await part.read_chunk(64 * 1024):
+            pass
 
     @log_exceptions
     async def download(self, request: web.Request):
@@ -552,28 +855,38 @@ class WebServer:
         # Single file - direct download
         if len(paths) == 1:
             decky.logger.info(f"File download - only one file found")
-            obj = self.fs.get_object(paths[0])
+            download_info = await run_sync(
+                _sync_get_download_file,
+                self.fs,
+                paths[0],
+                executor=self._executor,
+            )
 
-            if obj.isFile():
+            if download_info is not None:
+                file_path, filename = download_info
                 response = web.StreamResponse(
                     headers={
-                        "Content-Disposition": f'attachment; filename="{obj.path.name}"'
+                        "Content-Disposition": format_content_disposition(filename),
                     }
                 )
                 await response.prepare(request)
 
-                for chunk in self.fs.stream_read(paths[0]):
+                async for chunk in iter_file_chunks(file_path, self._executor):
                     await response.write(chunk)
 
                 await response.write_eof()
                 return response
 
         decky.logger.info(f"File download - multiple files detected, creating zip")
-        # Multiple or directory - ZIP
-        zip_buffer = self.fs.stream_zip(paths)
+        zip_bytes = await run_sync(
+            _sync_build_zip,
+            self.fs,
+            paths,
+            executor=self._executor,
+        )
 
         response = web.Response(
-            body=zip_buffer.read(),
+            body=zip_bytes,
             headers={
                 "Content-Type": "application/zip",
                 "Content-Disposition": 'attachment; filename="download.zip"'
@@ -589,12 +902,16 @@ class WebServer:
         if not path:
             raise web.HTTPBadRequest(reason="Missing path")
 
-        obj = self.fs.get_object(path)
-        if not obj.isFile():
+        view_info = await run_sync(
+            _sync_get_view_file,
+            self.fs,
+            path,
+            executor=self._executor,
+        )
+        if view_info is None:
             raise web.HTTPBadRequest(reason="Not a file")
 
-        file_path = obj.path
-        file_size = file_path.stat().st_size
+        file_path, file_size = view_info
 
         mime, _ = mimetypes.guess_type(path)
         mime = mime or "application/octet-stream"
@@ -623,21 +940,18 @@ class WebServer:
             try:
                 await response.prepare(request)
 
-                with open(file_path, "rb") as f:
-                    f.seek(start)
-                    remaining = chunk_size
-
-                    while remaining > 0:
-                        data = f.read(min(64 * 1024, remaining))
-                        if not data:
-                            break
-                        await response.write(data)
-                        remaining -= len(data)
+                async for data in iter_file_chunks(
+                    file_path,
+                    self._executor,
+                    start=start,
+                    length=chunk_size,
+                ):
+                    await response.write(data)
 
                 await response.write_eof()
             except (ClientConnectionResetError, asyncio.CancelledError):
                 decky.logger.info("Client disconnected during file streaming")
-            
+
             return response
 
         # ---- Fallback: no Range header ----
@@ -649,19 +963,81 @@ class WebServer:
         }
 
         response = web.StreamResponse(headers=headers)
-        
+
         try:
             await response.prepare(request)
 
-            with open(file_path, "rb") as f:
-                while chunk := f.read(64 * 1024):
-                    await response.write(chunk)
+            async for chunk in iter_file_chunks(file_path, self._executor):
+                await response.write(chunk)
 
             await response.write_eof()
         except (ClientConnectionResetError, asyncio.CancelledError):
             decky.logger.info("Client disconnected during fallback streaming")
 
         return response
+
+    @log_exceptions
+    async def read_text_file(self, request: web.Request):
+        path = request.query.get("path")
+        if not path:
+            raise web.HTTPBadRequest(reason="Missing path")
+
+        try:
+            result = await run_sync(
+                _sync_read_text,
+                self.fs,
+                path,
+                TEXT_FILE_MAX_BYTES,
+                executor=self._executor,
+            )
+            return web.json_response(result)
+        except FileNotFoundError:
+            raise web.HTTPNotFound(reason="File not found")
+        except ValueError as e:
+            message = str(e)
+            if "too large" in message.lower():
+                return web.json_response(
+                    {"error": "File is too large"},
+                    status=413,
+                )
+            return web.json_response(
+                {"error": "File is not valid UTF-8 text"},
+                status=415,
+            )
+
+    @log_exceptions
+    async def write_text_file(self, request: web.Request):
+        data = await request.json()
+        path = data.get("path")
+        content = data.get("content")
+
+        if not path:
+            raise web.HTTPBadRequest(reason="Missing path")
+        if content is None:
+            raise web.HTTPBadRequest(reason="Missing content")
+
+        try:
+            await run_sync(
+                _sync_write_text,
+                self.fs,
+                path,
+                content,
+                TEXT_FILE_MAX_BYTES,
+                executor=self._executor,
+            )
+            return web.json_response({"status": "ok"})
+        except FileNotFoundError:
+            raise web.HTTPNotFound(reason="File not found")
+        except PermissionError:
+            raise web.HTTPForbidden(reason="File is not writable")
+        except ValueError as e:
+            message = str(e)
+            if "too large" in message.lower():
+                return web.json_response(
+                    {"error": "Content is too large"},
+                    status=413,
+                )
+            raise web.HTTPBadRequest(reason=message)
     
     # =========================
     # PROTECTED ENDPOINTS - Game Recording
@@ -669,7 +1045,7 @@ class WebServer:
     @log_exceptions
     async def list_steam_clips(self, request: web.Request):
         decky.logger.info("list_steam_clips - initiated")
-        clips = gamerecording.scan_steam_recordings()
+        clips = await run_sync(_sync_scan_clips, executor=self._executor)
         return web.json_response({
             "count": len(clips),
             "clips": clips
@@ -695,7 +1071,12 @@ class WebServer:
         if not mpd_path:
             raise web.HTTPBadRequest(reason="Missing mpd path")
 
-        mpd = Path(mpd_path)
+        try:
+            resolved_mpd = self.fs._resolve(mpd_path)
+        except FileSystemError as e:
+            return filesystem_error_response(self.fs, e, mpd_path)
+
+        mpd = resolved_mpd
         if not mpd.exists() or mpd.name != "session.mpd":
             raise web.HTTPBadRequest(reason="Invalid session.mpd path")
         
@@ -727,22 +1108,23 @@ class WebServer:
         try:
             if browser_compatible:
                 await loop.run_in_executor(
-                    None,
+                    self._executor,
                     gamerecording.assemble_steam_clip_browser_compatible,
                     str(mpd),
                     output_path
                 )
             else:
                 await loop.run_in_executor(
-                    None,
+                    self._executor,
                     gamerecording.assemble_steam_clip,
                     str(mpd),
                     output_path
                 )
         except subprocess.CalledProcessError:
             raise web.HTTPInternalServerError(reason="FFmpeg failed assembling clip")
-        except Exception as e:
-            raise web.HTTPInternalServerError(reason=str(e))
+        except Exception:
+            decky.logger.exception("assemble_steam_clip failed")
+            raise web.HTTPInternalServerError(reason="Failed to assemble clip")
 
         decky.logger.info(f"Video assembled and moved to {videos_dir}")
         
@@ -756,7 +1138,7 @@ class WebServer:
     async def get_steam_clip_thumbnail(self, request: web.Request):
         clip_id = request.match_info["clipId"]
 
-        clips = gamerecording.scan_steam_recordings()
+        clips = await run_sync(_sync_scan_clips, executor=self._executor)
 
         for clip in clips:
             if clip["clipId"] == clip_id and clip["thumbnail"]:
@@ -774,19 +1156,15 @@ class WebServer:
 
     @log_exceptions
     async def list_all_drives(self, request: web.Request):
-        external_mounts = get_all_drives()
-
         data = await request.json()
         path = data.get("path")
-        currentDrive = os.path.expanduser("~")
 
-        if path:
-            currentDrive = get_drive_root(path)
-
-        return web.json_response({
-            "currentDrive": str(currentDrive),
-            "drives":[obj.to_dict() for obj in external_mounts]
-        })
+        payload = await run_sync(
+            _sync_list_drives,
+            path,
+            executor=self._executor,
+        )
+        return web.json_response(payload)
 
     # --------------------
     # SERVER LIFECYCLE
@@ -838,6 +1216,9 @@ class WebServer:
         if self._shutdown_task:
             self._shutdown_task.cancel()
             self._shutdown_task = None
+        if self._executor:
+            self._executor.shutdown(wait=False)
+            self._executor = None
 
 
     async def is_running(self) -> bool:

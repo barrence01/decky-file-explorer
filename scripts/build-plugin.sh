@@ -48,14 +48,21 @@ else
 fi
 
 # --------------------------------------------------
-# Docker availability check
+# Container engine availability check (Podman → Docker)
 # --------------------------------------------------
 
-DOCKER=""
+CONTAINER_ENGINE=""
 
-if command -v docker >/dev/null 2>&1; then
+if command -v podman >/dev/null 2>&1; then
+  if podman info >/dev/null 2>&1; then
+    CONTAINER_ENGINE="podman"
+    echo "✅ Podman available"
+  fi
+fi
+
+if [ -z "$CONTAINER_ENGINE" ] && command -v docker >/dev/null 2>&1; then
   if docker info >/dev/null 2>&1; then
-    DOCKER="docker"
+    CONTAINER_ENGINE="docker"
     echo "✅ Docker available (no sudo)"
   else
     echo "⚠️ Docker requires sudo."
@@ -63,42 +70,47 @@ if command -v docker >/dev/null 2>&1; then
 
     case "${CONFIRM,,}" in
       ""|"y"|"yes")
-        DOCKER="sudo docker"
+        CONTAINER_ENGINE="sudo docker"
         echo "✅ Using sudo docker"
         ;;
       *)
         echo "❌ Docker build skipped by user"
-        DOCKER=""
         ;;
     esac
   fi
-else
-  echo "❌ Docker not installed"
+fi
+
+if [ -z "$CONTAINER_ENGINE" ]; then
+  echo "❌ Podman or Docker not found/available"
+  exit 1
 fi
 
 # --------------------------------------------------
-# Docker build & run
+# Container build & run
 # --------------------------------------------------
 
-if [ "$BACKEND_DIR_FOUND" -eq 1 ] && [ -n "$DOCKER" ]; then
+if [ "$BACKEND_DIR_FOUND" -eq 1 ]; then
   echo "📦 Backend detected — building bcrypt"
   cd "$BACKEND_DIR"
 
-  echo "🐳 Building Docker image..."
+  echo "🐳 Building container image..."
   if [ "$BITS" = "32" ]; then
-    $DOCKER build -t bcrypt-builder .
+    $CONTAINER_ENGINE build -t bcrypt-builder .
   else
-    $DOCKER build --platform=linux/amd64 -t bcrypt-builder .
+    $CONTAINER_ENGINE build --platform=linux/amd64 -t bcrypt-builder .
   fi
 
-  echo "🚀 Running Docker container..."
+  echo "🚀 Running container..."
   if [ "$BITS" = "32" ]; then
-    $DOCKER run --rm \
+    $CONTAINER_ENGINE run --rm \
       -v "$BACKEND_DIR:/backend" \
+      -v "$PROJECT_ROOT:/project" \
       bcrypt-builder
   else
-    $DOCKER run --rm \
-      --platform=linux/amd64 -v "$(pwd)":/backend \
+    $CONTAINER_ENGINE run --rm \
+      --platform=linux/amd64 \
+      -v "$BACKEND_DIR:/backend" \
+      -v "$PROJECT_ROOT:/project" \
       bcrypt-builder
   fi
 
@@ -127,6 +139,23 @@ if [ "$BACKEND_DIR_FOUND" -eq 1 ] && [ -n "$DOCKER" ]; then
   echo "➡ ssl copied to: $SSL_DIR"
 fi
 
+WEBUI_INDEX="$PROJECT_ROOT/defaults/py_modules/webui/index.html"
+
+if [ ! -f "$WEBUI_INDEX" ]; then
+  echo "⚠️  Angular webui build output not found after container build"
+  echo "🚧 Building Angular webui locally..."
+  cd "$PROJECT_ROOT/webui"
+  pnpm install --frozen-lockfile
+  pnpm run build
+fi
+
+if [ ! -f "$WEBUI_INDEX" ]; then
+  echo "❌ Angular webui build output not found at $WEBUI_INDEX"
+  exit 1
+fi
+
+echo "✅ Angular webui build found at $WEBUI_INDEX"
+
 # --------------------------------------------------
 # PNPM CHECK
 # --------------------------------------------------
@@ -154,6 +183,16 @@ fi
 echo "🚧 Running pnpm run build..."
 cd "$PROJECT_ROOT"
 pnpm run build
+
+# --------------------------------------------------
+# ZIP CHECK
+# --------------------------------------------------
+
+if ! command -v zip >/dev/null 2>&1 || ! command -v zipinfo >/dev/null 2>&1; then
+  echo "❌ zip/zipinfo not found"
+  echo "   Arch: sudo pacman -S zip"
+  exit 1
+fi
 
 # --------------------------------------------------
 # ZIP PREP
@@ -200,6 +239,11 @@ if [ ! -d "$PROJECT_ROOT/dist" ]; then
   exit 1
 fi
 
+if [ ! -f "$WEBUI_INDEX" ]; then
+  echo "❌ defaults/py_modules/webui/index.html not found — webui build failed?"
+  exit 1
+fi
+
 # Create staging structure
 mkdir -p "$STAGING_DIR"
 
@@ -226,9 +270,9 @@ done
 
 # Cleanup
 rm -rf "$PROJECT_ROOT/.zip_tmp"
-if [ -n "$DOCKER" ]; then
+if [ -n "$CONTAINER_ENGINE" ] && [ "$BACKEND_DIR_FOUND" -eq 1 ]; then
   echo "📦 Copying SSL → bin/"
-  sudo rm -rf "$BIN_DIR/ssl"y
+  sudo rm -rf "$BIN_DIR/ssl"
   sudo cp -r "$SSL_DIR" "$BIN_DIR/"
   echo " Deleting → out/"
   echo "$BACKEND_DIR/out"

@@ -1,0 +1,53 @@
+<app-side-panel
+  [visible]="sidePanelVisible()"
+  (closePanel)="closeSidePanel()"
+/>
+
+@if (showSidePanelBackdrop) {
+  <div class="side-panel-backdrop" (click)="closeSidePanel()"></div>
+}
+
+<div
+  id="mainContent"
+  [class.shifted]="mainContentShifted"
+  [class.loading]="false"
+>
+  <app-feedback-bars />
+
+  <header [class.header--with-drive]="showDriveSelector && !isCompactView()">
+    <div class="header-start">
+      <i class="fas fa-bars hamburger" (click)="toggleSidePanel()"></i>
+      <nav class="breadcrumb" id="breadcrumb" aria-label="Breadcrumb">
+        @for (segment of navigationState.breadcrumbs(); track segment.path; let last = $last) {
+          @if (!last) {
+            <button
+              class="breadcrumb-segment"
+              type="button"
+              (click)="navigationState.navigateTo(segment.path)"
+            >
+              {{ segment.name }}
+            </button>
+            <span class="breadcrumb-separator">/</span>
+          } @else {
+            <span class="breadcrumb-current">{{ segment.name }}</span>
+          }
+        }
+      </nav>
+    </div>
+    <div class="header-end">
+      @if (showDriveSelector && !isCompactView()) {
+        <app-drive-selector (driveSelected)="onDriveSelected($event)" />
+      }
+      <h1 class="header-title">Steam Deck File Explorer</h1>
+    </div>
+  </header>
+
+  <router-outlet />
+
+  @if (showDriveSelector && isCompactView()) {
+    <app-drive-selector-overlay (driveSelected)="onDriveSelected($event)" />
+  }
+</div>
+
+<app-loading-overlay />
+<app-dialog-host />

@@ -1,0 +1,73 @@
+<div
+  class="file-explorer-view"
+  [class.file-explorer-view--mobile]="isCompactView()"
+  [class.file-explorer-view--drop-active]="dropActive()"
+  appFileDrop
+  [fileDropDisabled]="fileDropDisabled"
+  (filesDropped)="onFilesDropped($event)"
+  (dragActiveChange)="onDropActiveChange($event)"
+>
+  @if (isCompactView()) {
+    <app-file-explorer-mobile-toolbar
+      [actions]="toolbarActions"
+      [buildOverflowMenu]="buildOverflowMenu.bind(this)"
+    />
+  } @else {
+    <app-file-explorer-toolbar [actions]="toolbarActions" />
+  }
+
+  @if (showDirectoryError()) {
+    <div class="directory-error-banner">
+      <span>{{ directoryErrorMessage() }}</span>
+      <div class="directory-error-actions">
+        @if (canNavigateUp) {
+          <button type="button" (click)="navigateUp()">Go Up</button>
+        }
+        <button type="button" (click)="retryDirectory()">Retry</button>
+        <button type="button" (click)="goHome()">Go Home</button>
+      </div>
+    </div>
+  }
+
+  @if (dropActive()) {
+    <div class="file-drop-overlay">Drop files to upload</div>
+  }
+
+  <div class="file-list" id="fileList">
+    @for (file of visibleFiles(); track file.path + ':' + $index) {
+      <div
+        class="file-item"
+        [class.highlight-folder]="shouldHighlightFolder(file)"
+        [class.hidden-file]="file.isHidden"
+        [class.protected-file]="file.isProtected"
+        [title]="file.isProtected ? 'Access denied' : shouldHighlightFolder(file) ? 'Important folder' : ''"
+        [class.selected]="isSelected(file)"
+        (click)="!isCompactView() && !file.isProtected && onDesktopClick($event, file)"
+        (dblclick)="!isCompactView() && !file.isProtected && onDesktopDoubleClick(file)"
+        appLongPress
+        (longPress)="isCompactView() && !file.isProtected && onMobileLongPress(file)"
+        (shortPress)="isCompactView() && !file.isProtected && onMobileShortPress(file)"
+      >
+        <i [class]="getFileIconClass(file)"></i>
+        <div class="file-name">{{ truncateString(getFileName(file), 50) }}</div>
+      </div>
+    }
+  </div>
+</div>
+
+<app-properties-modal
+  [visible]="propertiesVisible()"
+  [target]="propertiesTarget"
+  (close)="closeProperties()"
+/>
+
+<app-preview-modal
+  [visible]="previewVisible()"
+  mode="file"
+  [file]="previewFile()"
+  (close)="closePreview()"
+  (download)="downloadPreview()"
+  (saved)="onPreviewSaved()"
+/>
+
+<app-upload-modal [visible]="uploadVisible()" [progress]="uploadProgress()" />

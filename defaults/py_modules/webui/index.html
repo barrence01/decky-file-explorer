@@ -1,102 +1,12 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-beasties-container>
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="utf-8">
     <title>Steam Deck File Explorer</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="shortcut icon" href="#">
-
-
-    <!-- Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" />
-    <link rel="stylesheet" href="scripts/common.css?v=1.0.4.8" />
-    <script type="module" src="scripts/menu.js?v=1.1.1.0"></script>
-  </head>
-  <!-- SIDE PANEL -->
-  <div id="sidePanel" class="side-panel">
-    <div id="side-panel-content">
-      <button id="logoffBtn" onclick="doLogoff()"><i class="fas fa-sign-out-alt"></i> Logoff</button>
-      <ul>
-        <button onclick="openAppMainPage()">Home</button>
-        <button onclick="openScanRecordingPage()">Steam - Game Recording</button>
-      </ul>
-      <div id="driveIndicator" class="drive-indicator">
-        <div class="drive-label">Drive</div>
-        <div id="currentDrive">Loading...</div>
-      </div>
-    </div>
-  </div>
-
-  <div id="previewModal" class="modal hidden">
-    <div class="preview-shell">
-      <header class="preview-header">
-        <span id="previewFilename"></span>
-        <button class="preview-close-btn" onclick="closePreview()" aria-label="Close preview">x</button>
-      </header>
-
-      <div id="previewBody" class="preview-body"></div>
-
-      <footer class="preview-footer">
-        <button onclick="downloadPreviewFile()">
-          <i class="fas fa-download"></i> Download
-        </button>
-      </footer>
-    </div>
-  </div>
-
+    <base href="/">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>:root{--fa-family-brands:"Font Awesome 7 Brands";--fa-font-brands:normal 400 1em/1 var(--fa-family-brands)}:root{--fa-font-regular:normal 400 1em/1 var(--fa-family-classic)}:root{--fa-family-classic:"Font Awesome 7 Free";--fa-font-solid:normal 900 1em/1 var(--fa-family-classic);--fa-style-family-classic:var(--fa-family-classic)}:root{--bp-sm:480px;--bp-md:768px;--bp-lg:1024px;--touch-target:44px;--sidebar-width:230px}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f4f6f8}</style><link rel="stylesheet" href="/styles-4X2HHRTD.css" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="/styles-4X2HHRTD.css"></noscript></head>
   <body>
-    <div id="mainContent">
-      <div id="error-bar" class="error-bar hidden"></div>
-      <div id="success-bar" class="success-bar hidden"></div>
-      <header>
-        <i class="fas fa-bars hamburger"></i>
-        <div class="breadcrumb" id="breadcrumb">/</div>
-        <h1 style="margin-left: auto;">Steam Deck File Explorer</h1>
-      </header>
-
-      <!-- LOGIN -->
-      <div id="loginView" style="display: flex;">
-        <div class="login-box">
-          <h2>Login</h2>
-          <input type="text" id="login" placeholder="Login" />
-          <input type="password" id="password" placeholder="Password" />
-          <button onclick="doLogin()">Login</button>
-        </div>
-      </div>
-
-      <!-- FILE MANAGER -->
-      <div id="fileView">
-        <div class="toolbar" id="toolbar"></div>
-        <div class="file-list" id="fileList"></div>
-      </div>
-
-      <!-- PROPERTIES MODAL -->
-      <div id="propertiesModal" class="modal hidden">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>Directory Properties</h3>
-            <button class="close-btn" onclick="closePropertiesModal()">
-              ×
-            </button>
-          </div>
-
-          <div class="modal-body" id="propertiesBody"></div>
-        </div>
-      </div>
-
-      <!-- UPLOAD MODAL -->
-      <div id="uploadModal" class="modal hidden">
-        <div class="modal-content">
-          <h3>Uploading…</h3>
-          <div class="progress-container">
-            <div id="uploadProgress" class="progress-bar"></div>
-          </div>
-          <div id="uploadStatus" class="upload-status">0%</div>
-        </div>
-      </div>
-    </div>
-    <div id="loadingOverlay" class="loading-overlay hidden">
-      <div class="spinner"></div>
-    </div>
-  </body>
+    <app-root></app-root>
+  <link rel="modulepreload" href="/chunk-L6VW3NEX.js"><link rel="modulepreload" href="/chunk-YERVTAUF.js"><link rel="modulepreload" href="/chunk-2BYYDYBX.js"><link rel="modulepreload" href="/chunk-NI674MCM.js"><script src="/polyfills-7R4CRVNH.js" type="module"></script><script src="/main-JC7RZNQL.js" type="module"></script></body>
 </html>

@@ -214,15 +214,28 @@ Thumbs.db
 # Extra
 # =========================
 credentials.json
+
+# Decky / plugin build and runtime
 .decky_log
 .decky_plugin
 .decky_settings
 .decky_plugin_runtime
-compiled
 .deckyloader-mock-env
+compiled
+bin
 DeckyFileExplorer.zip
 decky-file-explorer-*.zip
-bin
+.zip_tmp/
+backend/out/
+
+# Angular browser webui
+webui/node_modules/
+webui/.angular/
+defaults/py_modules/webui/*
+!defaults/py_modules/webui/.gitkeep
+
 instructions.txt
 SSL
 ssl
+
+decky-file-explorer.zip

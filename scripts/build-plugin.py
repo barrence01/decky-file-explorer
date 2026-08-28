@@ -22,6 +22,29 @@ def run_pnpm_install(path: Path):
         if result.returncode != 0:
             raise RuntimeError("pnpm install failed")
         
+def run_webui_build(path: Path):
+    webui_dir = path / "webui"
+    if not webui_dir.exists():
+        raise RuntimeError("webui directory not found")
+
+    if not (webui_dir / "node_modules").exists():
+        print("webui node_modules not found. Running 'pnpm install'")
+        subprocess.run(
+            ["pnpm", "install", "--frozen-lockfile"],
+            cwd=webui_dir,
+            check=True,
+        )
+
+    subprocess.run(
+        ["pnpm", "build"],
+        cwd=webui_dir,
+        check=True,
+    )
+
+    webui_index = path / "defaults" / "py_modules" / "webui" / "index.html"
+    if not webui_index.exists():
+        raise RuntimeError("Angular webui build output not found")
+
 def run_pnpm_build(path: Path):
     print(f"pnpm path: {path}")
     if path and path != Path('/'):
@@ -78,6 +101,9 @@ def build_plugin():
 
     # Build deckyUI
     run_pnpm_build(current_dir)
+
+    # Build browser webui
+    run_webui_build(current_dir)
     
     # Define zip file name
     zip_file_name = "decky-file-explorer.zip"

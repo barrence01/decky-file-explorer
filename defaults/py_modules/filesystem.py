@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 import shutil
@@ -7,7 +8,18 @@ import zipfile
 import io
 import os, subprocess, json
 
+from path_utils import (
+    build_breadcrumbs,
+    build_error_context,
+    can_navigate_up,
+    get_parent_path,
+    normalize_api_path,
+    resolve_destination,
+    validate_path_segment,
+)
+
 DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
+TEXT_FILE_MAX_BYTES = 524_288
 
 
 # =========================
@@ -16,6 +28,23 @@ DEFAULT_CHUNK_SIZE = 64 * 1024  # 64 KB
 
 class FileSystemError(Exception):
     pass
+
+
+class PathAccessError(FileSystemError):
+    def __init__(
+        self,
+        message: str,
+        path: str,
+        parent_path: str | None,
+        can_navigate_up: bool,
+        code: str = "access_denied",
+    ):
+        super().__init__(message)
+        self.path = path
+        self.parent_path = parent_path
+        self.can_navigate_up = can_navigate_up
+        self.code = code
+
 
 class FileAlreadyExistsError(Exception):
     pass
@@ -39,7 +68,7 @@ class DriveInfo:
 
     def to_dict(self) -> dict:
         return {
-            "path": str(self.path),
+            "path": normalize_api_path(self.path),
             "fstype": self.fstype,
             "removable": self.removable,
             "transport": self.transport
@@ -192,7 +221,21 @@ def get_drive_root(path: str | Path) -> Path:
 
 class FileSystemObject:
     def __init__(self, path: Path):
-        self.path = path.resolve()
+        try:
+            self.path = path.resolve()
+        except OSError:
+            self.path = path
+        self._cached_stat: os.stat_result | None = None
+        self._stat_checked = False
+
+    def _try_stat(self) -> os.stat_result | None:
+        if not self._stat_checked:
+            self._stat_checked = True
+            try:
+                self._cached_stat = self.path.stat()
+            except OSError:
+                self._cached_stat = None
+        return self._cached_stat
 
     # ---- Type checks ----
     def isDir(self) -> bool:
@@ -204,23 +247,32 @@ class FileSystemObject:
     def isHidden(self) -> bool:
         return self.path.name.startswith(".")
     
-    # def isProtected(self) -> bool:
-    #     try:
-    #         self.path.stat()
+    def isProtected(self) -> bool:
+        try:
+            self.path.stat()
 
-    #         if self.isDir():
-    #             os.listdir(self.path)
-    #         else:
-    #             with open(self.path, "rb"):
-    #                 pass
+            if self.isDir():
+                os.listdir(self.path)
+            else:
+                with open(self.path, "rb"):
+                    pass
 
-    #         return False
-    #     except (PermissionError, OSError):
-    #         return True
+            return False
+        except (PermissionError, OSError):
+            return True
+
+    def isWritable(self) -> bool:
+        try:
+            if self.isDir():
+                return os.access(self.path, os.W_OK)
+            return os.access(self.path, os.W_OK) and os.access(self.path.parent, os.W_OK)
+        except OSError:
+            return False
 
     # ---- Directory / file info ----
     def getDirectoryPath(self) -> str:
-        return str(self.path if self.isDir() else self.path.parent)
+        directory = self.path if self.isDir() else self.path.parent
+        return normalize_api_path(directory)
     
     def getItemsCount(self) -> int:
         if not self.isDir():
@@ -242,8 +294,24 @@ class FileSystemObject:
 
     def getSize(self) -> int:
         if self.isFile():
-            return self.path.stat().st_size
+            stat = self._try_stat()
+            return stat.st_size if stat else 0
         return 0
+
+    def getModifiedTime(self) -> float | None:
+        stat = self._try_stat()
+        return stat.st_mtime if stat else None
+
+    def getCreatedTime(self) -> float | None:
+        """Return creation time; falls back to ctime when birth time is unavailable."""
+        stat = self._try_stat()
+        if not stat:
+            return None
+        birth = getattr(stat, "st_birthtime", None)
+        return birth if birth is not None else stat.st_ctime
+
+    def _timestamp_to_iso(self, ts: float) -> str:
+        return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def getFileType(self) -> str:
         if not self.isFile():
@@ -255,15 +323,27 @@ class FileSystemObject:
 
         return mime.split("/")[0] 
 
-    def to_dict(self) -> dict:
+    def to_dict(self, base_dir: Path | None = None) -> dict:
         data = {
-            "path": str(self.path),
+            "path": normalize_api_path(self.path),
             "isDir": self.isDir(),
             "isFile": self.isFile(),
             "isHidden": self.isHidden(),
-            #"isProtected": self.isProtected(),
+            "isProtected": self.isProtected(),
+            "isWritable": self.isWritable(),
             "directory": self.getDirectoryPath(),
         }
+
+        modified = self.getModifiedTime()
+        created = self.getCreatedTime()
+        if modified is not None:
+            data["modifiedAt"] = self._timestamp_to_iso(modified)
+        if created is not None:
+            data["createdAt"] = self._timestamp_to_iso(created)
+
+        if base_dir is not None and self.isDir():
+            data["parentPath"] = get_parent_path(self.path, base_dir)
+            data["canNavigateUp"] = can_navigate_up(self.path, base_dir)
 
         if self.isDir():
             data.update({
@@ -341,14 +421,36 @@ class FileSystemService:
         return p
 
 
+    def _raise_path_access_error(self, directory: Path, message: str) -> None:
+        parent_path = get_parent_path(directory, self.base_dir)
+        raise PathAccessError(
+            message,
+            normalize_api_path(directory),
+            parent_path,
+            parent_path is not None,
+        )
+
     # ---- Directory operations ----
     def list_dir(self, path: str = "") -> List[FileSystemObject]:
         directory = self._resolve(path)
 
-        if not directory.exists() or not directory.is_dir():
-            raise FileNotFoundError("Directory not found")
+        if not directory.exists():
+            context = build_error_context(directory, self.base_dir)
+            raise PathAccessError(
+                "Directory not found",
+                normalize_api_path(directory),
+                context["parentPath"],
+                context["canNavigateUp"],
+                code="not_found",
+            )
 
-        return [FileSystemObject(p) for p in directory.iterdir()]
+        if not directory.is_dir():
+            raise NotADirectoryError("Path is not a directory")
+
+        try:
+            return [FileSystemObject(p) for p in directory.iterdir()]
+        except PermissionError:
+            self._raise_path_access_error(directory, "Access denied")
 
     def create_dir(self, path: str):
         directory = self._resolve(path)
@@ -406,7 +508,8 @@ class FileSystemService:
 
     def rename(self, path: str, new_name: str):
         src = self._resolve(path)
-        dst = src.parent / new_name
+        dst = resolve_destination(src.parent, new_name, self.base_dir)
+        self._resolve(normalize_api_path(dst))
         src.rename(dst)
 
     # ---- Info ----
@@ -417,6 +520,18 @@ class FileSystemService:
             raise FileNotFoundError("Path does not exist")
 
         return FileSystemObject(p)
+
+    def build_directory_metadata(self, path: str) -> dict:
+        directory = self.get_object(path)
+
+        if not directory.isDir():
+            raise NotADirectoryError("Path is not a directory")
+
+        resolved = directory.path
+        return {
+            "selectedDir": directory.to_dict(self.base_dir),
+            "breadcrumbs": build_breadcrumbs(resolved, self.base_dir),
+        }
 
     # ---- Streaming ----
     def stream_read(self, path: str, chunk_size: int = DEFAULT_CHUNK_SIZE):
@@ -435,16 +550,62 @@ class FileSystemService:
                     break
                 yield chunk
 
-    def open_write_stream(self, path: str) -> FileWriteStream:
+    def open_write_stream(self, path: str, overwrite: bool = False) -> FileWriteStream:
         """
         Opens a file for streamed writing.
         Returns a writable file object.
         """
         file_path = self._resolve(path)
         if Path(file_path).is_file():
-            raise FileAlreadyExistsError("File already exists")
+            if not overwrite:
+                raise FileAlreadyExistsError("File already exists")
+            file_path.unlink()
         file_path.parent.mkdir(parents=True, exist_ok=True)
         return FileWriteStream(open(file_path, "wb"))
+
+    def read_text(self, path: str, max_bytes: int = TEXT_FILE_MAX_BYTES) -> dict:
+        file_path = self._resolve(path)
+        if not file_path.is_file():
+            raise FileNotFoundError("File not found")
+
+        size = file_path.stat().st_size
+        if size > max_bytes:
+            raise ValueError("File is too large")
+
+        raw = file_path.read_bytes()
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("File is not valid UTF-8 text") from exc
+
+        obj = FileSystemObject(file_path)
+        return {
+            "content": content,
+            "size": size,
+            "maxBytes": max_bytes,
+            "isWritable": obj.isWritable(),
+        }
+
+    def write_text(self, path: str, content: str, max_bytes: int = TEXT_FILE_MAX_BYTES) -> None:
+        encoded = content.encode("utf-8")
+        if len(encoded) > max_bytes:
+            raise ValueError("Content is too large")
+
+        file_path = self._resolve(path)
+        if not file_path.is_file():
+            raise FileNotFoundError("File not found")
+
+        obj = FileSystemObject(file_path)
+        if not obj.isWritable():
+            raise PermissionError("File is not writable")
+
+        temp_path = file_path.with_suffix(file_path.suffix + ".tmp")
+        try:
+            temp_path.write_bytes(encoded)
+            temp_path.replace(file_path)
+        finally:
+            if temp_path.exists():
+                temp_path.unlink(missing_ok=True)
 
     def copy_streamed(self, src: str, dst: str, chunk_size=DEFAULT_CHUNK_SIZE):
         src_path = self._resolve(src)
@@ -476,6 +637,35 @@ class FileSystemService:
 
         buffer.seek(0)
         return buffer
+
+
+def read_file_chunk(path: Path, offset: int, size: int) -> bytes:
+    with open(path, "rb") as file:
+        file.seek(offset)
+        return file.read(size)
+
+
+async def iter_file_chunks(
+    path: Path,
+    executor,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    start: int = 0,
+    length: int | None = None,
+):
+    from utils import run_sync
+
+    offset = start
+    remaining = length
+
+    while remaining is None or remaining > 0:
+        read_size = min(chunk_size, remaining) if remaining is not None else chunk_size
+        chunk = await run_sync(read_file_chunk, path, offset, read_size, executor=executor)
+        if not chunk:
+            break
+        yield chunk
+        offset += len(chunk)
+        if remaining is not None:
+            remaining -= len(chunk)
 
 
 # =========================
