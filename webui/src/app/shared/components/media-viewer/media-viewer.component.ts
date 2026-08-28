@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { FileSystemObject } from '../../../core/models/file-system.model';
 import { FileSystemService } from '../../../core/services/file-system.service';
-import { getFileName } from '../../../core/utils/file-utils';
+import { getFileName, isEditableTextFile } from '../../../core/utils/file-utils';
 import { ImageViewerComponent } from './image-viewer.component';
 import { TextViewerComponent } from './text-viewer.component';
 import { VideoViewerComponent } from './video-viewer.component';
@@ -37,7 +37,7 @@ export type PreviewMode = 'file' | 'clip';
           </header>
           <div
             class="media-viewer-body"
-            [class.media-viewer-body--text]="mode === 'file' && file?.type === 'text'"
+            [class.media-viewer-body--text]="mode === 'file' && !!file && isEditableTextFile(file)"
           >
             @if (mode === 'file' && file) {
               @if (file.type === 'image') {
@@ -46,7 +46,7 @@ export type PreviewMode = 'file' | 'clip';
               @if (file.type === 'video') {
                 <app-video-viewer [src]="fileUrl" />
               }
-              @if (file.type === 'text') {
+              @if (isEditableTextFile(file)) {
                 <app-text-viewer
                   #textViewer
                   [file]="file"
@@ -61,7 +61,7 @@ export type PreviewMode = 'file' | 'clip';
           </div>
           @if (mode === 'file' && file) {
             <footer class="media-viewer-footer">
-              @if (file.type === 'text' && textViewer?.canEdit()) {
+              @if (isEditableTextFile(file) && textViewer?.canEdit()) {
                 <button
                   type="button"
                   [disabled]="!textDirty() || (textViewer?.saving() ?? false)"
@@ -178,6 +178,7 @@ export class MediaViewerComponent {
   @ViewChild('textViewer') textViewer?: TextViewerComponent;
 
   readonly textDirty = signal(false);
+  readonly isEditableTextFile = isEditableTextFile;
 
   constructor(private readonly fileSystemService: FileSystemService) {}
 

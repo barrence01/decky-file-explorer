@@ -13,6 +13,7 @@ import { PasteConflictResponse } from '../../core/models/file-system.model';
 import {
   getFileName,
   isCompactView,
+  isEditableTextFile,
   shouldHighlightFolder,
   truncateString,
 } from '../../core/utils/file-utils';
@@ -280,7 +281,7 @@ export class FileExplorerComponent implements OnInit {
       return false;
     }
 
-    return file.type === 'text';
+    return isEditableTextFile(file);
   }
 
   async onPreviewSaved(): Promise<void> {

@@ -1,4 +1,4 @@
-import { shouldHighlightFolder } from './file-utils';
+import { isEditableTextFile, shouldHighlightFolder } from './file-utils';
 
 describe('shouldHighlightFolder', () => {
   function folder(path: string) {
@@ -40,5 +40,36 @@ describe('shouldHighlightFolder', () => {
 
   it('does not highlight files', () => {
     expect(shouldHighlightFolder(file('/home/deck/Desktop/readme.txt'))).toBeFalse();
+  });
+});
+
+describe('isEditableTextFile', () => {
+  function editableFile(path: string, extension?: string, type?: string) {
+    return { isDir: false, path, extension, type };
+  }
+
+  it('accepts plain text files by mime type', () => {
+    expect(isEditableTextFile(editableFile('/home/deck/readme.txt', '.txt', 'text'))).toBeTrue();
+  });
+
+  it('accepts json files by extension', () => {
+    expect(isEditableTextFile(editableFile('/home/deck/config.json', '.json', 'application'))).toBeTrue();
+  });
+
+  it('accepts html and css files by extension', () => {
+    expect(isEditableTextFile(editableFile('/home/deck/index.html', '.html', 'text'))).toBeTrue();
+    expect(isEditableTextFile(editableFile('/home/deck/styles.css', '.css', 'text'))).toBeTrue();
+  });
+
+  it('accepts extensionless dockerfile by filename', () => {
+    expect(isEditableTextFile(editableFile('/home/deck/Dockerfile'))).toBeTrue();
+  });
+
+  it('rejects binary files', () => {
+    expect(isEditableTextFile(editableFile('/home/deck/photo.png', '.png', 'image'))).toBeFalse();
+  });
+
+  it('rejects directories', () => {
+    expect(isEditableTextFile({ isDir: true, path: '/home/deck/docs' })).toBeFalse();
   });
 });
