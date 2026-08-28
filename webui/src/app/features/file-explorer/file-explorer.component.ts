@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, inject, signal } from '@angular/core';
+import { Component, computed, OnInit, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { FileSystemObject } from '../../core/models/file-system.model';
 import {
@@ -18,6 +18,7 @@ import {
   truncateString,
 } from '../../core/utils/file-utils';
 import { TEXT_FILE_MAX_BYTES } from '../../core/constants/file-limits';
+import { sortFileSystemObjects } from '../../core/utils/sort-utils';
 import { PropertiesModalComponent } from '../../shared/components/properties-modal/properties-modal.component';
 import { PreviewModalComponent } from '../../shared/components/preview-modal/preview-modal.component';
 import { UploadModalComponent } from '../../shared/components/upload-modal/upload-modal.component';
@@ -69,6 +70,26 @@ export class FileExplorerComponent implements OnInit {
   readonly shouldHighlightFolder = shouldHighlightFolder;
   readonly isCompactView = isCompactView;
 
+  readonly visibleFiles = computed(() => {
+    const seen = new Set<string>();
+    const filtered = this.state
+      .dirContent()
+      .filter((file) => {
+        if (seen.has(file.path)) {
+          return false;
+        }
+        seen.add(file.path);
+        return true;
+      })
+      .filter((file) => this.state.showHidden() || !file.isHidden);
+
+    return sortFileSystemObjects(
+      filtered,
+      this.state.sortField(),
+      this.state.sortDirection()
+    );
+  });
+
   private lastRequestedPath: string | null = null;
 
   constructor() {
@@ -83,20 +104,6 @@ export class FileExplorerComponent implements OnInit {
 
   ngOnInit(): void {
     void this.loadDirectory();
-  }
-
-  get visibleFiles(): FileSystemObject[] {
-    const seen = new Set<string>();
-    return this.state
-      .dirContent()
-      .filter((file) => {
-        if (seen.has(file.path)) {
-          return false;
-        }
-        seen.add(file.path);
-        return true;
-      })
-      .filter((file) => this.state.showHidden() || !file.isHidden);
   }
 
   get parentPath(): string | null {
@@ -132,6 +139,8 @@ export class FileExplorerComponent implements OnInit {
       clipboardActive: this.state.clipboardItems().length > 0,
       clipboardCount: this.state.clipboardItems().length,
       showHidden: this.state.showHidden(),
+      sortField: this.state.sortField(),
+      sortDirection: this.state.sortDirection(),
       onUp: () => this.navigateUp(),
       onRefresh: () => this.retryDirectory(),
       onUpload: () => this.uploadFiles(),
@@ -143,6 +152,9 @@ export class FileExplorerComponent implements OnInit {
       onNewFolder: () => this.createNewFolder(),
       onProperties: () => this.showProperties(),
       onToggleHidden: () => this.toggleShowHidden(),
+      onSortFieldChange: (field) => this.state.setSortField(field),
+      onToggleSortDirection: () => this.state.toggleSortDirection(),
+      onSetSortDirection: (direction) => this.state.setSortDirection(direction),
       onPaste: () => this.pasteClipboard(),
       onClearClipboard: () => this.clearClipboard(),
     };
@@ -606,6 +618,10 @@ export class FileExplorerComponent implements OnInit {
 
     if (selectionCount > 1) {
       items.push({ label: 'Download', action: () => this.downloadSelected() });
+    }
+
+    if (selectionCount > 0) {
+      items.push({ label: 'Sort', openSortSheet: true, action: () => {} });
     }
 
     items.push({

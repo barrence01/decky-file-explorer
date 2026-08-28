@@ -3,6 +3,9 @@ export interface BreadcrumbSegment {
   path: string;
 }
 
+export type SortField = 'name' | 'modified' | 'created';
+export type SortDirection = 'asc' | 'desc';
+
 export interface FileSystemObject {
   path: string;
   parentPath?: string | null;
@@ -18,6 +21,8 @@ export interface FileSystemObject {
   size?: number;
   type?: string;
   itemsCount?: number;
+  modifiedAt?: string;
+  createdAt?: string;
 }
 
 export interface DirectoryListResponse {

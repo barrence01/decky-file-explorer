@@ -80,6 +80,35 @@ import { ToolbarActions } from './toolbar-actions';
         <div class="toolbar-separator"></div>
 
         <div class="toolbar-group">
+          <label class="sort-control">
+            <i class="fas fa-arrow-down-wide-short sort-control__icon"></i>
+            <select
+              class="sort-control__select"
+              [value]="actions.sortField"
+              (change)="onSortFieldChange($event)"
+            >
+              <option value="name">Name</option>
+              <option value="created">Created</option>
+              <option value="modified">Modified</option>
+            </select>
+          </label>
+          <button
+            class="btn-interactive sort-direction-btn"
+            type="button"
+            [title]="actions.sortDirection === 'asc' ? 'Ascending' : 'Descending'"
+            (click)="actions.onToggleSortDirection()"
+          >
+            <i
+              class="fas"
+              [class.fa-arrow-up-wide-short]="actions.sortDirection === 'asc'"
+              [class.fa-arrow-down-wide-short]="actions.sortDirection === 'desc'"
+            ></i>
+          </button>
+        </div>
+
+        <div class="toolbar-separator"></div>
+
+        <div class="toolbar-group">
           @if (actions.selectionCount <= 1) {
             <button class="btn-interactive" type="button" title="Properties" (click)="actions.onProperties()">
               <i class="fas fa-circle-info"></i>
@@ -186,8 +215,45 @@ import { ToolbarActions } from './toolbar-actions';
       color: #1d4ed8;
       font-weight: 500;
     }
+
+    .sort-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: #f9fafb;
+      cursor: pointer;
+    }
+
+    .sort-control__icon {
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .sort-control__select {
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      color: #374151;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .sort-direction-btn {
+      min-width: 36px;
+      justify-content: center;
+    }
   `,
 })
 export class FileExplorerToolbarComponent {
   @Input({ required: true }) actions!: ToolbarActions;
+
+  onSortFieldChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    if (value === 'name' || value === 'created' || value === 'modified') {
+      this.actions.onSortFieldChange(value);
+    }
+  }
 }

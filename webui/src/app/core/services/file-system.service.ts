@@ -5,6 +5,8 @@ import {
   ClipboardMode,
   DirectoryListResponse,
   FileSystemObject,
+  SortDirection,
+  SortField,
   TextFileContentResponse,
 } from '../models/file-system.model';
 import { ApiError, ApiErrorResponse } from '../models/api-error.model';
@@ -139,6 +141,26 @@ export class FileExplorerStateService {
   readonly clipboardItems = signal<FileSystemObject[]>([]);
   readonly clipboardMode = signal<ClipboardMode | null>(null);
   readonly showHidden = signal(false);
+  readonly sortField = signal<SortField>('name');
+  readonly sortDirection = signal<SortDirection>('asc');
+
+  setSortField(field: SortField): void {
+    const defaultDirection: Record<SortField, SortDirection> = {
+      name: 'asc',
+      modified: 'desc',
+      created: 'desc',
+    };
+    this.sortField.set(field);
+    this.sortDirection.set(defaultDirection[field]);
+  }
+
+  toggleSortDirection(): void {
+    this.sortDirection.update((direction) => (direction === 'asc' ? 'desc' : 'asc'));
+  }
+
+  setSortDirection(direction: SortDirection): void {
+    this.sortDirection.set(direction);
+  }
 
   clearClipboard(): void {
     this.clipboardItems.set([]);

@@ -34,7 +34,7 @@
   }
 
   <div class="file-list" id="fileList">
-    @for (file of visibleFiles; track file.path + ':' + $index) {
+    @for (file of visibleFiles(); track file.path + ':' + $index) {
       <div
         class="file-item"
         [class.highlight-folder]="shouldHighlightFolder(file)"

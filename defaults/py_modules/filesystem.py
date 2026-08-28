@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 import shutil
@@ -220,7 +221,21 @@ def get_drive_root(path: str | Path) -> Path:
 
 class FileSystemObject:
     def __init__(self, path: Path):
-        self.path = path.resolve()
+        try:
+            self.path = path.resolve()
+        except OSError:
+            self.path = path
+        self._cached_stat: os.stat_result | None = None
+        self._stat_checked = False
+
+    def _try_stat(self) -> os.stat_result | None:
+        if not self._stat_checked:
+            self._stat_checked = True
+            try:
+                self._cached_stat = self.path.stat()
+            except OSError:
+                self._cached_stat = None
+        return self._cached_stat
 
     # ---- Type checks ----
     def isDir(self) -> bool:
@@ -279,8 +294,24 @@ class FileSystemObject:
 
     def getSize(self) -> int:
         if self.isFile():
-            return self.path.stat().st_size
+            stat = self._try_stat()
+            return stat.st_size if stat else 0
         return 0
+
+    def getModifiedTime(self) -> float | None:
+        stat = self._try_stat()
+        return stat.st_mtime if stat else None
+
+    def getCreatedTime(self) -> float | None:
+        """Return creation time; falls back to ctime when birth time is unavailable."""
+        stat = self._try_stat()
+        if not stat:
+            return None
+        birth = getattr(stat, "st_birthtime", None)
+        return birth if birth is not None else stat.st_ctime
+
+    def _timestamp_to_iso(self, ts: float) -> str:
+        return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def getFileType(self) -> str:
         if not self.isFile():
@@ -302,6 +333,13 @@ class FileSystemObject:
             "isWritable": self.isWritable(),
             "directory": self.getDirectoryPath(),
         }
+
+        modified = self.getModifiedTime()
+        created = self.getCreatedTime()
+        if modified is not None:
+            data["modifiedAt"] = self._timestamp_to_iso(modified)
+        if created is not None:
+            data["createdAt"] = self._timestamp_to_iso(created)
 
         if base_dir is not None and self.isDir():
             data["parentPath"] = get_parent_path(self.path, base_dir)
